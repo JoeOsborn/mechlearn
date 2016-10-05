@@ -7,10 +7,16 @@ cd mechlearn
 git submodule init
 git submodule update
 
+# You should have zlib-dev installed via apt-get or brew or pacman or whatever.
+# You'll need cmake and some kind of C++ compiler.
+# Also, maybe make a python environment if you want to.
+# it should have:
+# pip install pytest
+
 cd pybind11
 mkdir build
 cd build
-cmake ..
+cmake -D PYBIND11_PYTHON_VERSION=2.7 ..
 make pytest -j 4 # make sure the pybind tests pass!
 cp -r ../include/pybind11 /usr/local/include/ # or modify fceulib's makefile to look for these in the right place.
 
