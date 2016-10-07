@@ -24,6 +24,11 @@ cd ../..
 
 cd ../fceulib
 make bind
+
+#Do this if you want Python to be able to find it (and don't care abouts setting a virtualenv or the like
+echo "export PYTHONPATH=\"\$PYTHONPATH:`pwd`\""
+
+
 cp fceulib.so ../mechlearn # put the library somewhere Python can find it later
 
 cd ../mechlearn
