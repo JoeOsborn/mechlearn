@@ -80,7 +80,6 @@ def go(game):
 
     # find: initial velocity, gravity, additive force, max duration (time
     # after which longer button doesn't help)
-
     for v, jvec in enumerate(jumpInputs):
         print("LOAD " + str(v))
         emu.load(start)
@@ -91,9 +90,12 @@ def go(game):
         y_posns.append(ram_ptr[mario_y])
         print("Start y:" + str(y_posns[0]))
         state = J_START
+        # how many frames to consider for finding initial jump speed
+        initial_speed_t = 5
         trise = 0
         drise = 0
         vrise = 0
+        vrise_start = 0
         tfall = 0
         dfall = 0
         vfall = 0
@@ -108,6 +110,8 @@ def go(game):
             if state == J_RISE:
                 trise += 1
                 drise += dy
+                if trise == initial_speed_t:
+                    vrise_start = drise / float(trise)
             if state == J_FALL:
                 tfall += 1
                 dfall += dy
@@ -117,12 +121,23 @@ def go(game):
             if state == J_RISE and dy >= 0:
                 state = J_FALL
                 vrise = drise / float(trise)
-                print "Rise: {} units in {} s -> {} u/s".format(drise, trise, vrise)
+                print "Rise: {} units in {} f -> {} u/f".format(drise, trise, vrise)
+                print "Initial rise V: {} u/f".format(vrise_start)
+                # at^2 + vt + c = 0
+                # a tt + vt + c = 0
+                # a = (-c - vt)/tt
+                arise = (drise - vrise_start * trise) / float(trise * trise)
+                print "Rise gravity: {}".format(arise)
                 print "APEX"
             if state == J_FALL and y_posns[-1] == y_posns[0]:
                 state = J_END
                 vfall = dfall / float(tfall)
-                print "Fall: {} units in {} s -> {} u/s".format(dfall, tfall, vfall)
+                print "Fall: {} units in {} f -> {} u/f".format(dfall, tfall, vfall)
+                # at^2 + vt + c = 0
+                # at^2 = -c
+                # a = -c/t^2
+                afall = dfall / float(tfall * tfall)
+                print "Fall gravity: {} u/f^2".format(afall)
                 print "LAND"
                 break
     print "Total steps:" + str(total)
