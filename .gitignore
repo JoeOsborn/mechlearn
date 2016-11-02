@@ -1,3 +1,8 @@
 *.o
 *.pyc
 cc-lib/*.o
+batman_*.png
+*.nes
+*.so
+*.dSYM
+.ipynb_checkpoints/
