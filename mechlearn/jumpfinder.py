@@ -1,6 +1,7 @@
 import fceulib
 from fceulib import VectorBytes
 from PIL import Image
+import numbers
 
 """
 Character learning has two components.  First, we need to learn the structure of the automaton representing the automaton.  ProbFOIL, a relational learning library built on top of ProbLog, seems a natural choice---at any rate, it remains for future work.
@@ -11,6 +12,60 @@ We'll work with non-hierarchical, non-concurrent hybrid automata for now.  Also,
 """
 
 
+class Stat:
+
+    def __init__(self, v, smooth):
+        self.window = smooth
+        self.lastVal = float(v)
+        self.observedVals = 1
+        if smooth is None:
+            self.netVal = v
+            self.observedVals = 1.0
+        else:
+            self.vals = [float(v)]
+            self.netVal = float(v)
+            for i in range(1, smooth):
+                self.vals.append(0.0)
+            self.idx = 1
+
+    def __repr__(self):
+        return "Stat(" + str(self.val()) + "," + str(self.window) + ")"
+
+    def val(self):
+        if self.window is None:
+            return self.netVal / self.observedVals
+        else:
+            return self.netVal / float(min(self.window, self.observedVals))
+
+    def update(self, value, clobber=False):
+        self.lastVal = float(value)
+        self.observedVals += 1.0
+        if self.window is None:
+            if clobber:
+                self.netVal = float(value)
+                self.observedVals = 1.0
+            else:
+                self.netVal += float(value)
+        else:
+            if clobber:
+                self.vals[0] = float(value)
+                self.netVal = float(value)
+                for i in range(1, self.window):
+                    self.vals[i] = 0.0
+                self.idx = 1
+                self.observedVals = 1.0
+            else:
+                self.netVal -= self.vals[self.idx]
+                self.netVal += float(value)
+                self.vals[self.idx] = float(value)
+                self.idx = (self.idx + 1) % self.window
+
+    def steady(self, frac=0.5):
+        # Last value within frac% of avg value
+        print "Steady? " + "LV:" + str(self.lastVal) + ", V:" + str(self.val()) + " : " + str(abs(self.lastVal - self.val())) + " vs " + str(abs(self.val() * float(frac)))
+        return abs(self.lastVal - self.val()) <= abs(self.val() * float(frac))
+
+
 class HA:
 
     def __init__(self, params, vbls, constraints, states, initial):
@@ -19,9 +74,9 @@ class HA:
         self.variableNames = set()
         for k, v in vbls.items():
             self.variableNames.add(k)
-            self.variables[(k, 0)] = v
-            self.variables[(k, 1)] = 0
-            self.variables[(k, 2)] = 0
+            self.variables[(k, 0)] = float(v)
+            self.variables[(k, 1)] = 0.0
+            self.variables[(k, 2)] = 0.0
         self.constraints = constraints
         self.states = states
         self.initial = initial
@@ -29,7 +84,9 @@ class HA:
     def makeValuation(self, inits):
         values = self.variables.copy()
         values.update(inits)
-        return HAVal(values, self.initial, 0)
+        for k, v in values.items():
+            values[k] = float(v)
+        return HAVal(values, self.initial, 0.0)
 
     def bound(self, val, var):
         if var in self.constraints:
@@ -48,14 +105,12 @@ class HA:
 
     def continuousStep(self, val, flows, dt):
         for v in self.variableNames:
-            x = self.toValue(flows.get((v, 0), 0), val)
-            dx = self.toValue(flows.get((v, 1), 0), val)
-            ddx = self.toValue(flows.get((v, 2), 0), val)
+            x = self.toValue(flows.get((v, 0), 0.0), val)
+            dx = self.toValue(flows.get((v, 1), 0.0), val)
+            ddx = self.toValue(flows.get((v, 2), 0.0), val)
             oldX = val.variables[(v, 0)]
             oldDX = val.variables[(v, 1)]
             if x != 0:
-                oldX = val.variables[(v, 0)]
-                oldDX = val.variables[(v, 1)]
                 val.variables[(v, 0)] = x
                 val.variables[(v, 1)] = x - oldX
                 val.variables[(v, 2)] = val.variables[(v, 1)] - oldDX
@@ -68,7 +123,7 @@ class HA:
                 val.variables[(v, 2)] = ddx
                 val.variables[(v, 1)] += ddx * dt
                 self.bound(val, (v, 1))
-                val.variables[(v, 0)] += val.variables[(v, 1)]
+                val.variables[(v, 0)] += val.variables[(v, 1)] * dt
                 self.bound(val, (v, 0))
         val.timeInState += dt
         val.time += dt
@@ -76,6 +131,8 @@ class HA:
     def discreteStep(self, val, transitions, buttons):
         for t in transitions:
             if t.guardSatisfied(self, val, buttons):
+                # print ("Follow: " + val.state + " -> " + t.target + " via " +
+                #        str(t.guard))
                 for k, v in (t.update or {}).items():
                     val.variables[k] = self.toValue(v, val)
                 if val.state != t.target:
@@ -85,25 +142,44 @@ class HA:
 
     def toValue(self, expr, valuation):
         if expr in self.params:
-            return self.params[expr]
+            p = self.params[expr]
+            if isinstance(p, Stat):
+                return p.val()
+            else:
+                return float(p)
         elif expr in valuation.variables:
-            return valuation.variables[expr]
-        elif expr is tuple and expr[0] == "max":
+            return float(valuation.variables[expr])
+        elif isinstance(expr, tuple) and expr[0] == "max":
             return max(self.toValue(expr[1], valuation),
                        self.toValue(expr[2], valuation))
-        elif expr is tuple and expr[0] == "min":
+        elif isinstance(expr, tuple) and expr[0] == "min":
             return min(self.toValue(expr[1], valuation),
                        self.toValue(expr[2], valuation))
+        elif isinstance(expr, numbers.Number):
+            return expr
+        print "Default expr:" + str(expr) + " type:" + str(type(expr))
         return expr
 
 
 class HAVal:
 
-    def __init__(self, vbls, initial, t):
+    def __init__(self, vbls, initial, t, timeInState=0):
         self.variables = vbls
         self.state = initial
         self.time = t
-        self.timeInState = 0
+        self.timeInState = timeInState
+
+    def __str__(self):
+        return ("HAVal. " + self.state +
+                "(" + str(self.timeInState) + ")" +
+                "\n  " + str(self.variables) +
+                "\n  Alive: " + str(self.time))
+
+    def copy(self):
+        return HAVal(self.variables.copy(),
+                     self.state,
+                     self.time,
+                     self.timeInState)
 
 
 class HAState:
@@ -162,7 +238,7 @@ class HATransition:
 There are three hypotheses we're interested in.
 
 1. First, does this jump vary depending on duration of holding the button?
-2. Second, is there acceleration while ascending, 
+2. Second, is there acceleration while ascending,
    or is Y velocity fixed for some duration?
 3. Finally, does hitting the ceiling kill y-velocity?
 
@@ -174,14 +250,14 @@ and we can start accounting for 3 later (maybe with a Boolean parameter?).
 """
 
 marioModel = HA(
-    {"gravity": -10,
-     "jumpStartSpeed": 20,
-     "terminalVY": -40,
-     "risingGravity": -5,
-     "maxButtonDuration": (1.0 / 30.0),
-     "earlyOutClipVel": 10},
+    {"gravity": Stat(0, None),
+     "jumpStartSpeed": Stat(0, None),
+     "terminalVY": Stat(0, None),
+     "risingGravity": Stat(0, None),
+     "maxButtonDuration": Stat(0, None),
+     "earlyOutClipVel": Stat(0, None)},
     {"x": 0, "y": 0},
-    {("y", 1): ("terminalVY", 200)},
+    {("y", 1): (-200, "terminalVY")},
     {
         "ground": HAState({("y", 1): 0}, [
             HATransition("up",
@@ -219,24 +295,51 @@ marioModel = HA(
 )
 
 
+class Stats:
+
+    def __init__(self, x, y, smooth=5):
+        self.x = Stat(x, smooth)
+        self.y = Stat(y, smooth)
+        self.dx = Stat(0, smooth)
+        self.dy = Stat(0, smooth)
+        self.ddx = Stat(0, smooth)
+        self.ddy = Stat(0, smooth)
+        self.smooth = smooth
+        self.firstUpdate = True
+
+    def update(self, x, y):
+        lx = self.x.lastVal
+        self.x.update(x)
+        ly = self.y.lastVal
+        self.y.update(y)
+        ldx = self.dx.val()
+        dx = x - lx
+        self.dx.update(dx, self.firstUpdate)
+        ldy = self.dy.val()
+        dy = y - ly
+        self.dy.update(dy, self.firstUpdate)
+        ddx = self.dx.val() - ldx
+        self.ddx.update(ddx, self.firstUpdate)
+        ddy = self.dy.val() - ldy
+        self.ddy.update(ddy, self.firstUpdate)
+        self.firstUpdate = False
+
+
 def calcErrorStep(model, val,
                   emulator, xget, yget,
                   m,
-                  lastX, lastY, lastDX, lastDY):
+                  stats):
     model.step(val, 1.0 / 30.0, set(["jump"] if m & JUMP else []))
     emulator.step(m, 0x0)
     nowX = xget(emulator)
     nowY = yget(emulator)
-    nowDX = nowX - lastX
-    nowDY = nowY - lastY
-    nowDDX = nowDX - lastDX
-    nowDDY = nowDY - lastDY
-    hereErrors = (nowX - val.variables[("x", 0)],
-                  nowX - val.variables[("y", 0)],
-                  nowDX - val.variables[("x", 1)],
-                  nowDY - val.variables[("y", 1)],
-                  nowDDX - val.variables[("x", 2)],
-                  nowDDY - val.variables[("y", 2)])
+    stats.update(nowX, nowY)
+    hereErrors = (stats.x.val() - val.variables[("x", 0)],
+                  stats.y.val() - val.variables[("y", 0)],
+                  stats.dx.val() - val.variables[("x", 1)],
+                  stats.dy.val() - val.variables[("y", 1)],
+                  stats.ddx.val() - val.variables[("x", 2)],
+                  stats.ddy.val() - val.variables[("y", 2)])
     return hereErrors
 
 
@@ -254,10 +357,7 @@ def calcError(model, emulator, xget, yget, actions):
     for k in model.states:
         netErrorsByState[k] = [0, 0, 0, 0, 0, 0]
     netErrors = [0, 0, 0, 0, 0, 0]
-    lastX = startX
-    lastY = startY
-    lastDX = 0
-    lastDY = 0
+    stats = Stats(startX, startY)
     for m in actions:
         # TODO: buttons for real
         # TODO: collisions
@@ -265,17 +365,11 @@ def calcError(model, emulator, xget, yget, actions):
             model, v, emulator,
             xget, yget,
             m,
-            lastX, lastY, lastDX, lastDY
+            stats
         )
         for i in range(0, 6):
             netErrors[i] += abs(hereErrors[i])
-            netErrorsByState[v.state] += abs(hereErrors[i])
-        nowX = xget(emulator)
-        nowY = yget(emulator)
-        lastDX = nowX - lastX
-        lastDY = nowY - lastY
-        lastX = nowX
-        lastY = nowY
+            netErrorsByState[v.state][i] += abs(hereErrors[i])
         errorsByFrame.append(hereErrors)
     return (netErrors, errorsByFrame, netErrorsByState)
 
@@ -312,8 +406,9 @@ def go(game):
     total = 0
     emu = fceulib.runGame(game)
     startInputs = hold(0x0, 120) + hold(START | JUMP, 30) + hold(0x0, 150)
+    maxHeldFrames = 5
     jumpInputs = [hold(JUMP, t) + hold(0x0, 60)
-                  for t in range(1, 30)]
+                  for t in range(1, maxHeldFrames + 1)]
     for m in startInputs:
         total = total + 1
         emu.step(m, 0x0)
@@ -364,42 +459,128 @@ def go(game):
     model = marioModel
     xget = marioGetX
     yget = marioGetY
-    for v, jvec in enumerate(jumpInputs):
-        print("LOAD " + str(v))
+
+    errorsByFrame = []
+    netErrorsByState = {}
+    for k in model.states:
+        netErrorsByState[k] = [0, 0, 0, 0, 0, 0]
+    netErrors = [0, 0, 0, 0, 0, 0]
+
+    lastJumpDuration = 0
+    boring = False
+    dt = 1.0 / 30.0
+    for test, jvec in enumerate(jumpInputs):
+        if boring:
+            print "Boring by test " + str(test)
+            break
+        print "Params:" + str(model.params)
+        print "Error:" + str(netErrors)
+        print("LOAD " + str(test))
         emu.load(start)
         startX = xget(emu)
         startY = yget(emu)
+        stats = Stats(startX, startY, 5)
         v = model.makeValuation({("x", 0): startX, ("y", 0): startY})
-        errorsByFrame = []
-        netErrorsByState = {}
-        for k in model.states:
-            netErrorsByState[k] = [0, 0, 0, 0, 0, 0]
-        netErrors = [0, 0, 0, 0, 0, 0]
-        lastX = startX
-        lastY = startY
-        lastDX = 0
-        lastDY = 0
-        for m in jvec:
+        emuState = "ground"
+        print "Start val " + str(v)
+        print "Start Y:" + str(startY)
+        # across jumps. refine all params and also find:
+        # earlyOutClipVel
+        # maxButtonDuration
+        for (i, m) in enumerate(jvec):
             # TODO: buttons for real
             # TODO: collisions
+            lastV = v.copy()
+            oldDY = stats.dy.lastVal
+            oldSmoothDY = stats.dy.val()
             hereErrors = calcErrorStep(
                 model, v, emu,
                 xget, yget,
                 m,
-                lastX, lastY, lastDX, lastDY
+                stats
             )
-            for i in range(0, 6):
-                netErrors[i] += abs(hereErrors[i])
-                netErrorsByState[v.state][i] += abs(hereErrors[i])
-            nowX = xget(emu)
-            nowY = yget(emu)
-            lastDX = nowX - lastX
-            lastDY = nowY - lastY
-            lastX = nowX
-            lastY = nowY
+
+            print "New stats Y:" + str(stats.y.val())
+            for ei in range(0, 6):
+                netErrors[ei] += abs(hereErrors[ei])
+                netErrorsByState[v.state][ei] += abs(hereErrors[ei])
+            print "Now DY:" + str(stats.dy.lastVal) + " smooth: " + str(stats.dy.val()) + " acc from that: (dsharp) " + str(stats.dy.lastVal - oldDY) + " (dsmooth) " + str(stats.dy.val() - oldSmoothDY)
+
+            nowY = stats.y.lastVal
+
+            # OK, what happened?
+            # Let's try to fit our model to the observations.
+            # within jump:
+            # "gravity": 0,
+            # "jumpStartSpeed": 0,
+            # "terminalVY": 0,
+            # "risingGravity": 0,
+            # use vY of first frame to update initial jump V
+            # guess. over time this should converge.
+            if 1 <= i <= 2:
+                model.params["jumpStartSpeed"].update(stats.dy.lastVal)
+            # Similarly for other parameters.
+            # TODO: Can we learn these without knowing e.g. invariants on each
+            # state's dynamics? Or without knowing that some states use
+            # accels and others use vels?
+            print "DDYs:" + str(stats.ddy.vals) + " " + str(stats.ddy.netVal)
+            if emuState == "up":  # rising
+                print "Rising AY:" + str(stats.ddy.lastVal)
+                model.params["risingGravity"].update(stats.ddy.lastVal)
+            elif emuState == "down":  # falling
+                print "Falling AY:" + str(stats.ddy.lastVal)
+                model.params["gravity"].update(stats.ddy.lastVal)
+
+            # print str(v)
+            print "Now Y:" + str(nowY)
+            print "Err Here:" + str(hereErrors)
+
             errorsByFrame.append(hereErrors)
+
+            if emuState == "ground" and nowY < startY:
+                emuState = "up"
+            elif emuState == "up" and stats.dy.lastVal >= 0 or abs(stats.ddy.val() - stats.ddy.lastVal) > 1.0:
+                emuState = "down"
+            elif emuState == "down" and stats.y.lastVal == startY:
+                emuState = "ground"
+
+            # update the HA forcibly to have the right valuation. we want
+            # to learn frame-to-frame differences, so accumulating tons of
+            # error isn't interesting.
+            if v.state != emuState and lastV.state == emuState:
+                v = lastV
+                v.timeInState += dt
+                v.time += dt
+            elif v.state != emuState:
+                # todo: take proper transition?
+                v.state = emuState
+                v.timeInState = 0
+            v.variables[("x", 0)] = stats.x.lastVal
+            v.variables[("x", 1)] = stats.dx.lastVal
+            v.variables[("x", 2)] = stats.ddx.lastVal
+            v.variables[("y", 0)] = stats.y.lastVal
+            v.variables[("y", 1)] = stats.dy.lastVal
+            v.variables[("y", 2)] = stats.ddy.lastVal
+            total += 1
+            if emuState == "ground" and len(errorsByFrame) > 5:
+                if i > lastJumpDuration:
+                    model.params["maxButtonDuration"] = max(
+                        test * dt,
+                        model.params["maxButtonDuration"]
+                    )
+                    print "New dur: " + str(model.params["maxButtonDuration"])
+                else:
+                    boring = True
+                print "Duration: " + str(i) + "; Last: " + str(lastJumpDuration)
+                lastJumpDuration = i
+                break
+#            if len(errorsByFrame) >= 20:
+#                break
     print "Total steps:" + str(total)
+    print "Params:" + str(model.params)
     print "Error:" + str(netErrors)
+    emu.load(start)
+    print "Cur error:" + str(calcError(model, emu, marioGetX, marioGetY, jumpInputs[0])[0])
 
 
 if __name__ == "__main__":
