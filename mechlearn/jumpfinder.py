@@ -2,6 +2,7 @@ import fceulib
 from fceulib import VectorBytes
 from PIL import Image
 import numbers
+import math
 
 """
 Character learning has two components.  First, we need to learn the structure of the automaton representing the automaton.  ProbFOIL, a relational learning library built on top of ProbLog, seems a natural choice---at any rate, it remains for future work.
@@ -233,6 +234,7 @@ class HATransition:
         else:
             raise ("Unrecognized Guard", g)
 
+DT = 1.0 / 60.0
 
 """
 There are three hypotheses we're interested in.
@@ -255,7 +257,9 @@ marioModel = HA(
      "terminalVY": Stat(0, None),
      "risingGravity": Stat(0, None),
      "maxButtonDuration": Stat(0, None),
-     "earlyOutClipVel": Stat(0, None)},
+     "earlyOutClipVel": Stat(0, None),
+     # Just for curiosity/info
+     "longestJump": Stat(0, None)},
     {"x": 0, "y": 0},
     {("y", 1): (-200, "terminalVY")},
     {
@@ -329,7 +333,7 @@ def calcErrorStep(model, val,
                   emulator, xget, yget,
                   m,
                   stats):
-    model.step(val, 1.0 / 30.0, set(["jump"] if m & JUMP else []))
+    model.step(val, DT, set(["jump"] if m & JUMP else []))
     emulator.step(m, 0x0)
     nowX = xget(emulator)
     nowY = yget(emulator)
@@ -402,13 +406,98 @@ def marioGetY(emu):
     return emu.fc.fceu.RAM[mario_y]
 
 
+def findJumpHoldLimit(emu, start, getx, gety, model):
+    maxHeldFrames = 120
+    jumpInputs = [hold(JUMP, t) + hold(0x0, 120)
+                  for t in range(1, maxHeldFrames + 1)]
+    longestJump = 0
+    for (i, jvec) in enumerate(jumpInputs):
+        startX = getx(emu)
+        startY = gety(emu)
+        stats = Stats(startX, startY, 5)
+        val = model.makeValuation({("x", 0): startX,
+                                   ("y", 0): startY})
+        for (j, move) in enumerate(jvec):
+            calcErrorStep(
+                model, val, emu,
+                getx, gety,
+                move,
+                stats
+            )
+            if stats.y.lastVal == startY and j > 5:
+                thisJumpDuration = (j + 1) * DT
+                # print "Jump duration " + str(thisJumpDuration)
+                if thisJumpDuration > longestJump:
+                    longestJump = thisJumpDuration
+                    thisButtonHold = (i + 1) * DT
+                    if thisButtonHold > model.params["maxButtonDuration"].val():
+                        # print "Longer limit: " + str(model.params["maxButtonDuration"].val()) + " -> " + str(thisButtonHold - DT)
+                        # The button is pushed at the beginning of this frame,
+                        # but the timer doesn't start ticking until the next.
+                        model.params["maxButtonDuration"].update(
+                            thisButtonHold - DT,
+                            True
+                        )
+                break
+    emu.load(start)
+    print "Jump hold limit: " + str(model.params["maxButtonDuration"].val()) + " Longest jump: " + str(longestJump)
+    if longestJump > model.params["longestJump"].val():
+        model.params["longestJump"].update(longestJump, True)
+    return model.params["maxButtonDuration"].val()
+
+
+def findJumpAccs(emu, start, getx, gety, model):
+    maxHeldFrames = int(
+        math.ceil(model.params["maxButtonDuration"].val() / DT))
+    maxWaitFrames = int(math.ceil(model.params["longestJump"].val() / DT))
+    jumpInputs = [hold(JUMP, t) + hold(0x0, maxWaitFrames)
+                  for t in range(1, maxHeldFrames + 1)]
+
+    for (i, jvec) in enumerate(jumpInputs):
+        startX = getx(emu)
+        startY = gety(emu)
+        stats = Stats(startX, startY, 5)
+        val = model.makeValuation({("x", 0): startX,
+                                   ("y", 0): startY})
+        for (j, move) in enumerate(jvec):
+            calcErrorStep(
+                model, val, emu,
+                getx, gety,
+                move,
+                stats
+            )
+            if j == 0:  # noticed a transition
+                # print "JSS:" + str(stats.dy.lastVal)
+                model.params["jumpStartSpeed"].update(
+                    stats.dy.lastVal, i == 0 and j == 0)
+                # print "-->" + str(model.params["jumpStartSpeed"].val())
+            elif j > 0 and (move & JUMP):  # emu state == UP, perfect knowledge
+                # print "RG:" + str(stats.ddy.lastVal)
+                model.params["risingGravity"].update(
+                    stats.ddy.lastVal, i == 0 and j == 1)
+                # print "-->" + str(model.params["risingGravity"].val())
+            elif stats.y.lastVal != startY:  # emu state == DOWN, perfect knowledge
+                # print "G:" + str(stats.ddy.lastVal)
+                # TODO: learn earlyOutClipVel if jvec[j-1] & JUMP, but
+                #       don't try to learn gravity on that frame! Also
+                #       may need to tweak whether to learn jumping gravity
+                #       on the last frame before releasing the button.
+                model.params["gravity"].update(
+                    stats.ddy.lastVal, i == 0 and (jvec[j - 1] & JUMP))
+                # print "-->" + str(model.params["gravity"].val())
+            else:
+                break
+    print "Param Results:"
+    print "JSS>" + str(model.params["jumpStartSpeed"].val())
+    print "RG->" + str(model.params["risingGravity"].val())
+    print "G-->" + str(model.params["gravity"].val())
+    emu.load(start)
+
+
 def go(game):
     total = 0
     emu = fceulib.runGame(game)
     startInputs = hold(0x0, 120) + hold(START | JUMP, 30) + hold(0x0, 150)
-    maxHeldFrames = 5
-    jumpInputs = [hold(JUMP, t) + hold(0x0, 60)
-                  for t in range(1, maxHeldFrames + 1)]
     for m in startInputs:
         total = total + 1
         emu.step(m, 0x0)
@@ -419,7 +508,8 @@ def go(game):
     emu.save(start)
     print("SAVED")
     # outputImage(emu, "start")
-
+    findJumpHoldLimit(emu, start, marioGetX, marioGetY, marioModel)
+    findJumpAccs(emu, start, marioGetX, marioGetY, marioModel)
     # for now: hard-code mario x y pointers, but derive velocity numerically
     # we want to note:
     #  starting y position
@@ -453,135 +543,6 @@ def go(game):
     #  Hold Jump Input (this refers to holding horizontal while jumping)
     #  Minimum Jump Height u (derived quantity)
     #  Minimum Jump Duration s (duplicated for some reason)
-
-    # find: initial velocity, gravity, additive force, max duration (time
-    # after which longer button doesn't help)
-    model = marioModel
-    xget = marioGetX
-    yget = marioGetY
-
-    errorsByFrame = []
-    netErrorsByState = {}
-    for k in model.states:
-        netErrorsByState[k] = [0, 0, 0, 0, 0, 0]
-    netErrors = [0, 0, 0, 0, 0, 0]
-
-    lastJumpDuration = 0
-    boring = False
-    dt = 1.0 / 30.0
-    for test, jvec in enumerate(jumpInputs):
-        if boring:
-            print "Boring by test " + str(test)
-            break
-        print "Params:" + str(model.params)
-        print "Error:" + str(netErrors)
-        print("LOAD " + str(test))
-        emu.load(start)
-        startX = xget(emu)
-        startY = yget(emu)
-        stats = Stats(startX, startY, 5)
-        v = model.makeValuation({("x", 0): startX, ("y", 0): startY})
-        emuState = "ground"
-        print "Start val " + str(v)
-        print "Start Y:" + str(startY)
-        # across jumps. refine all params and also find:
-        # earlyOutClipVel
-        # maxButtonDuration
-        for (i, m) in enumerate(jvec):
-            # TODO: buttons for real
-            # TODO: collisions
-            lastV = v.copy()
-            oldDY = stats.dy.lastVal
-            oldSmoothDY = stats.dy.val()
-            hereErrors = calcErrorStep(
-                model, v, emu,
-                xget, yget,
-                m,
-                stats
-            )
-
-            print "New stats Y:" + str(stats.y.val())
-            for ei in range(0, 6):
-                netErrors[ei] += abs(hereErrors[ei])
-                netErrorsByState[v.state][ei] += abs(hereErrors[ei])
-            print "Now DY:" + str(stats.dy.lastVal) + " smooth: " + str(stats.dy.val()) + " acc from that: (dsharp) " + str(stats.dy.lastVal - oldDY) + " (dsmooth) " + str(stats.dy.val() - oldSmoothDY)
-
-            nowY = stats.y.lastVal
-
-            # OK, what happened?
-            # Let's try to fit our model to the observations.
-            # within jump:
-            # "gravity": 0,
-            # "jumpStartSpeed": 0,
-            # "terminalVY": 0,
-            # "risingGravity": 0,
-            # use vY of first frame to update initial jump V
-            # guess. over time this should converge.
-            if 1 <= i <= 2:
-                model.params["jumpStartSpeed"].update(stats.dy.lastVal)
-            # Similarly for other parameters.
-            # TODO: Can we learn these without knowing e.g. invariants on each
-            # state's dynamics? Or without knowing that some states use
-            # accels and others use vels?
-            print "DDYs:" + str(stats.ddy.vals) + " " + str(stats.ddy.netVal)
-            if emuState == "up":  # rising
-                print "Rising AY:" + str(stats.ddy.lastVal)
-                model.params["risingGravity"].update(stats.ddy.lastVal)
-            elif emuState == "down":  # falling
-                print "Falling AY:" + str(stats.ddy.lastVal)
-                model.params["gravity"].update(stats.ddy.lastVal)
-
-            # print str(v)
-            print "Now Y:" + str(nowY)
-            print "Err Here:" + str(hereErrors)
-
-            errorsByFrame.append(hereErrors)
-
-            if emuState == "ground" and nowY < startY:
-                emuState = "up"
-            elif emuState == "up" and stats.dy.lastVal >= 0 or abs(stats.ddy.val() - stats.ddy.lastVal) > 1.0:
-                emuState = "down"
-            elif emuState == "down" and stats.y.lastVal == startY:
-                emuState = "ground"
-
-            # update the HA forcibly to have the right valuation. we want
-            # to learn frame-to-frame differences, so accumulating tons of
-            # error isn't interesting.
-            if v.state != emuState and lastV.state == emuState:
-                v = lastV
-                v.timeInState += dt
-                v.time += dt
-            elif v.state != emuState:
-                # todo: take proper transition?
-                v.state = emuState
-                v.timeInState = 0
-            v.variables[("x", 0)] = stats.x.lastVal
-            v.variables[("x", 1)] = stats.dx.lastVal
-            v.variables[("x", 2)] = stats.ddx.lastVal
-            v.variables[("y", 0)] = stats.y.lastVal
-            v.variables[("y", 1)] = stats.dy.lastVal
-            v.variables[("y", 2)] = stats.ddy.lastVal
-            total += 1
-            if emuState == "ground" and len(errorsByFrame) > 5:
-                if i > lastJumpDuration:
-                    model.params["maxButtonDuration"] = max(
-                        test * dt,
-                        model.params["maxButtonDuration"]
-                    )
-                    print "New dur: " + str(model.params["maxButtonDuration"])
-                else:
-                    boring = True
-                print "Duration: " + str(i) + "; Last: " + str(lastJumpDuration)
-                lastJumpDuration = i
-                break
-#            if len(errorsByFrame) >= 20:
-#                break
-    print "Total steps:" + str(total)
-    print "Params:" + str(model.params)
-    print "Error:" + str(netErrors)
-    emu.load(start)
-    print "Cur error:" + str(calcError(model, emu, marioGetX, marioGetY, jumpInputs[0])[0])
-
 
 if __name__ == "__main__":
     go('mario.nes')
