@@ -318,14 +318,14 @@ class Stats:
         self.y.update(y)
         ldx = self.dx.val()
         dx = x - lx
-        self.dx.update(dx, self.firstUpdate)
+        self.dx.update(dx / DT, self.firstUpdate)
         ldy = self.dy.val()
         dy = y - ly
-        self.dy.update(dy, self.firstUpdate)
+        self.dy.update(dy / DT, self.firstUpdate)
         ddx = self.dx.val() - ldx
-        self.ddx.update(ddx, self.firstUpdate)
+        self.ddx.update(ddx / DT, self.firstUpdate)
         ddy = self.dy.val() - ldy
-        self.ddy.update(ddy, self.firstUpdate)
+        self.ddy.update(ddy / DT, self.firstUpdate)
         self.firstUpdate = False
 
 
@@ -460,6 +460,7 @@ def findJumpAccs(emu, start, getx, gety, model):
         val = model.makeValuation({("x", 0): startX,
                                    ("y", 0): startY})
         for (j, move) in enumerate(jvec):
+            lastDY = stats.dy.val()
             calcErrorStep(
                 model, val, emu,
                 getx, gety,
@@ -471,20 +472,30 @@ def findJumpAccs(emu, start, getx, gety, model):
                 model.params["jumpStartSpeed"].update(
                     stats.dy.lastVal, i == 0 and j == 0)
                 # print "-->" + str(model.params["jumpStartSpeed"].val())
-            elif j > 0 and (move & JUMP):  # emu state == UP, perfect knowledge
+            elif j > 0 and (jvec[j] & JUMP):  # emu state == UP, perfect knowledge
                 # print "RG:" + str(stats.ddy.lastVal)
                 model.params["risingGravity"].update(
                     stats.ddy.lastVal, i == 0 and j == 1)
                 # print "-->" + str(model.params["risingGravity"].val())
             elif stats.y.lastVal != startY:  # emu state == DOWN, perfect knowledge
                 # print "G:" + str(stats.ddy.lastVal)
-                # TODO: learn earlyOutClipVel if jvec[j-1] & JUMP, but
-                #       don't try to learn gravity on that frame! Also
-                #       may need to tweak whether to learn jumping gravity
-                #       on the last frame before releasing the button.
-                model.params["gravity"].update(
-                    stats.ddy.lastVal, i == 0 and (jvec[j - 1] & JUMP))
-                # print "-->" + str(model.params["gravity"].val())
+                # learn earlyOutClipVel if jvec[j-1] & JUMP, but
+                # don't try to learn gravity on that frame!
+                if jvec[j - 1] & JUMP:
+                    # just transitioned to falling.
+                    # We know that because by construction we don't jump (much)
+                    # longer than it helps to do so.
+                    acc = model.params["risingGravity"].val()
+                    expectedDY = lastDY + acc * DT
+                    difference = abs(stats.dy.lastVal - expectedDY)
+                    print "DY: " + str(stats.dy.lastVal) + " Expected: " + str(expectedDY) + " delta: " + str(difference)
+                    if abs(difference) > 0.1:
+                        print "Velocity jump by " + str(difference) + "; Is it constant or an expr?"
+                else:
+                    # aggregate falling gravity
+                    model.params["gravity"].update(
+                        stats.ddy.lastVal, i == 0 and (jvec[j - 1] & JUMP))
+                    # print "-->" + str(model.params["gravity"].val())
             else:
                 break
     print "Param Results:"
