@@ -3,6 +3,9 @@ from fceulib import VectorBytes
 from PIL import Image
 import numbers
 import math
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 """
 Character learning has two components.  First, we need to learn the structure of the automaton representing the automaton.  ProbFOIL, a relational learning library built on top of ProbLog, seems a natural choice---at any rate, it remains for future work.
@@ -19,9 +22,13 @@ class Stat:
         self.window = smooth
         self.lastVal = float(v)
         self.observedVals = 1
+        self.allVals = []
         if smooth is None:
             self.netVal = v
             self.observedVals = 1.0
+        elif smooth == "interesting_mode":
+            self.initVal = float(v)
+            self.vals = [float(v)]
         else:
             self.vals = [float(v)]
             self.netVal = float(v)
@@ -35,10 +42,24 @@ class Stat:
     def val(self):
         if self.window is None:
             return self.netVal / self.observedVals
+        elif self.window == "interesting_mode":
+            counts = dict()
+            for v in self.vals:
+                counts[v] = counts.get(v, 0) + 1
+            sortedCounts = counts.items()
+            sortedCounts.sort()
+            threshold = math.ceil(math.log(self.observedVals))
+            if len(sortedCounts) >= 2:
+                threshold = max(threshold, sortedCounts[1][1])
+            if sortedCounts[0][1] > threshold:
+                return sortedCounts[0][0]
+            else:
+                return self.initVal
         else:
             return self.netVal / float(min(self.window, self.observedVals))
 
     def update(self, value, clobber=False):
+        self.allVals.append(float(value))
         self.lastVal = float(value)
         self.observedVals += 1.0
         if self.window is None:
@@ -47,6 +68,11 @@ class Stat:
                 self.observedVals = 1.0
             else:
                 self.netVal += float(value)
+        elif self.window == "interesting_mode":
+            if clobber:
+                self.observedVals = 1.0
+                self.vals = []
+            self.vals.append(float(value))
         else:
             if clobber:
                 self.vals[0] = float(value)
@@ -252,16 +278,17 @@ and we can start accounting for 3 later (maybe with a Boolean parameter?).
 """
 
 marioModel = HA(
-    {"gravity": Stat(0, None),
-     "jumpStartSpeed": Stat(0, None),
-     "terminalVY": Stat(0, None),
-     "risingGravity": Stat(0, None),
-     "maxButtonDuration": Stat(0, None),
-     "earlyOutClipVel": Stat(0, None),
+    {"gravity": Stat(0.0, None),
+     "jumpStartSpeed": Stat(0.0, None),
+     "terminalVY": Stat(100000.0, None),
+     "risingGravity": Stat(0.0, None),
+     "maxButtonDuration": Stat(100000.0, None),
+     "minButtonDuration": Stat(0.0, None),
+     "earlyOutClipVel": Stat(-100000.0, "interesting_mode"),
      # Just for curiosity/info
      "longestJump": Stat(0, None)},
     {"x": 0, "y": 0},
-    {("y", 1): (-200, "terminalVY")},
+    {("y", 1): (-1000000.0, "terminalVY")},
     {
         "ground": HAState({("y", 1): 0}, [
             HATransition("up",
@@ -272,7 +299,7 @@ marioModel = HA(
                          None)
         ]),
         "up": HAState({("y", 2): "risingGravity"}, [
-            # This edge may not always be present
+            # This edge may not always be present.
             HATransition("down",
                          [("colliding", "top", "ground")],
                          {("y", 1): 0}),
@@ -280,12 +307,17 @@ marioModel = HA(
                          [("timer", "maxButtonDuration")],
                          None),
             HATransition("down",
-                         [("button", "off", "jump")],
-                         {("y", 1): ("min", ("y", 1), "earlyOutClipVel")})
+                         [("button", "off", "jump"),
+                          ("timer", "minButtonDuration")],
+                         # Use _max_ here because negative Y is up, positive Y
+                         # is down.  The point of this is to bring Y closer to
+                         # downwards when you leave up.
+                         {("y", 1): ("max", ("y", 1), "earlyOutClipVel")})
         ]),
         "down": HAState({("y", 2): "gravity"}, [
-            # not always present, here for the case where we are in down state
-            # but our velocity is still positive
+            # this edge may not always be present.
+            # It's here too for the case where we are in down state
+            # but our velocity is still positive.
             HATransition("down",
                          [("colliding", "top", "ground")],
                          {("y", 1): 0}),
@@ -357,14 +389,15 @@ def calcError(model, emulator, xget, yget, jumpButton, actions):
     startX = xget(emulator)
     startY = yget(emulator)
     v = model.makeValuation({("x", 0): startX, ("y", 0): startY})
-    print "Start state:"+v.state
+    print "Start state:" + v.state
     errorsByFrame = []
     netErrorsByState = {}
     for k in model.states:
         netErrorsByState[k] = [0, 0, 0, 0, 0, 0]
     netErrors = [0, 0, 0, 0, 0, 0]
+    grossErrors = [0, 0, 0, 0, 0, 0]
     stats = Stats(startX, startY)
-    for (i,m) in enumerate(actions):
+    for (i, m) in enumerate(actions):
         # TODO: buttons for real
         # TODO: collisions
         hereErrors = calcErrorStep(
@@ -373,16 +406,19 @@ def calcError(model, emulator, xget, yget, jumpButton, actions):
             m,
             stats
         )
-        print "F:"+str(i)+" J?:"+str(True if m&jumpButton else False)
-        print "MState:"+str(v.state)
-        print "Y:"+str(yget(emulator))
-        print "MY:"+str(v.variables[("y",0)])
-        print "here errors:"+str(hereErrors)
+        # TODO: hack because I don't deal with collision yet for the model
+        if yget(emulator) == startY and i > 5:
+            break
+        print "F:" + str(i) + " J?:" + str(True if m & jumpButton else False)
+        print str(v)
+        print "Y:" + str(yget(emulator)) + " DY:" + str(stats.dy.val()) + " DDY:" + str(stats.ddy.val())
+        print "here errors:" + str(hereErrors)
         for i in range(0, 6):
-            netErrors[i] += abs(hereErrors[i])
+            netErrors[i] += hereErrors[i]
+            grossErrors[i] += abs(hereErrors[i])
             netErrorsByState[v.state][i] += abs(hereErrors[i])
         errorsByFrame.append(hereErrors)
-    return (netErrors, errorsByFrame, netErrorsByState)
+    return (netErrors, grossErrors, errorsByFrame, netErrorsByState)
 
 
 RIGHT = 1 << 7
@@ -416,21 +452,26 @@ def outputImage(emu, name, buf=imgBuffer):
 def marioGetX(emu):
     return emu.fc.fceu.RAM[mario_x]
 
+
 def marioGetY(emu):
     return emu.fc.fceu.RAM[mario_y]
 
+
 def metroidGetX(emu):
     return emu.fc.fceu.RAM[metroid_x]
+
 
 def metroidGetY(emu):
     return emu.fc.fceu.RAM[metroid_y]
 
 
 def findJumpHoldLimit(emu, start, getx, gety, jumpButton, model):
+    # FIXME: Quite domain specific
     maxHeldFrames = 120
     jumpInputs = [hold(jumpButton, t) + hold(0x0, 600)
                   for t in range(1, maxHeldFrames + 1)]
     longestJump = 0
+    veryShortestJump = 0
     for (i, jvec) in enumerate(jumpInputs):
         startX = getx(emu)
         startY = gety(emu)
@@ -446,32 +487,40 @@ def findJumpHoldLimit(emu, start, getx, gety, jumpButton, model):
             )
             if stats.y.lastVal == startY and j > 5:
                 thisJumpDuration = (j + 1) * DT
+                thisButtonHold = (i + 1) * DT
+                if i == 0:
+                    veryShortestJump = thisJumpDuration
+                if abs(thisJumpDuration - veryShortestJump) < DT:
+                    model.params["minButtonDuration"].update(
+                        thisButtonHold,
+                        True
+                    )
                 # print "Jump duration " + str(thisJumpDuration)
                 if thisJumpDuration > longestJump:
                     longestJump = thisJumpDuration
-                    thisButtonHold = (i + 1) * DT
-                    if thisButtonHold > model.params["maxButtonDuration"].val():
-                        # print "Longer limit: " + str(model.params["maxButtonDuration"].val()) + " -> " + str(thisButtonHold - DT)
+                    model.params["maxButtonDuration"].update(
                         # The button is pushed at the beginning of this frame,
                         # but the timer doesn't start ticking until the next.
-                        model.params["maxButtonDuration"].update(
-                            thisButtonHold - DT,
-                            True
-                        )
+                        thisButtonHold - DT,
+                        True
+                    )
                 break
         emu.load(start)
-    print "Jump hold limit: " + str(model.params["maxButtonDuration"].val()) + " Longest jump: " + str(longestJump)
+    print "Jump hold min: " + str(model.params["minButtonDuration"].val()) + " Shortest jump: " + str(veryShortestJump)
+    print "Jump hold max: " + str(model.params["maxButtonDuration"].val()) + " Longest jump: " + str(longestJump)
     if longestJump > model.params["longestJump"].val():
         model.params["longestJump"].update(longestJump, True)
     return model.params["maxButtonDuration"].val()
 
 
 def findJumpAccs(emu, start, getx, gety, jumpButton, model):
+    minHeldFrames = int(
+        math.floor(model.params["minButtonDuration"].val() / DT))
     maxHeldFrames = int(
         math.ceil(model.params["maxButtonDuration"].val() / DT))
     maxWaitFrames = int(math.ceil(model.params["longestJump"].val() / DT))
     jumpInputs = [hold(jumpButton, t) + hold(0x0, maxWaitFrames)
-                  for t in range(1, maxHeldFrames + 1)]
+                  for t in range(minHeldFrames, maxHeldFrames + 1)]
 
     for (i, jvec) in enumerate(jumpInputs):
         startX = getx(emu)
@@ -491,66 +540,118 @@ def findJumpAccs(emu, start, getx, gety, jumpButton, model):
                 move,
                 stats
             )
-            # too fine-tuned for Mario, Metroid jump does not start until subsequent frame!  Should check for "velocity increased from initial 0"
-            print "DY:"+str(stats.dy.lastVal)
+            # FIXME: The below conditions are all quite hacky
+            # too fine-tuned for Mario, Metroid jump does not start until
+            # subsequent frame!  Should check for "velocity increased from
+            # initial 0"
             if j == stats.smooth:  # our first transition
-                ###eeeeeh, close but not quite there. some of this starting vel is still counting as an upward acceleration during the upwards jump part, which seems wrong? Do we speed up while the button is being held? Not 100% sure.  is metroid behavior documented??
-                print "JSS:" + str(j)+":"+str(stats.dy.val())
+                # eeeeeh, close but not quite there. some of this starting vel
+                # is still counting as an upward acceleration during the
+                # upwards jump part, which seems wrong? Do we speed up while
+                # the button is being held? Not 100% sure.  is metroid behavior
+                # documented??
+                # print "JSS:" + str(j) + ":" + str(stats.dy.val())
                 startedJump = True
                 model.params["jumpStartSpeed"].update(
                     stats.dy.val(), i == 0)
                 jumpStartDY = stats.dy.val()
                 # print "-->" + str(model.params["jumpStartSpeed"].val())
-            elif startedJump and (jvec[j] & jumpButton):  # emu state == UP, perfect knowledge
-                print "RG:" + str(stats.ddy.lastVal)
-                model.params["risingGravity"].update(
-                    stats.ddy.lastVal, i == 0 and j == 1)
-                print "-->" + str(model.params["risingGravity"].val())
+            # emu state == UP, perfect knowledge
+            elif startedJump and (jvec[j] & jumpButton):
+                pass
+                # print "RG:" + str(stats.ddy.lastVal)
+                # model.params["risingGravity"].update(
+                #    stats.ddy.lastVal, i == 0 and j == stats.smooth + 1)
+                # print "-->" + str(model.params["risingGravity"].val())
             elif startedJump and stats.y.lastVal != startY:  # emu state == DOWN, perfect knowledge
-                print "G:" + str(stats.ddy.lastVal)
+                # print "G:" + str(stats.ddy.lastVal)
                 # learn earlyOutClipVel if jvec[j-1] & jumpButton, but
                 # don't try to learn gravity on that frame!
                 if jvec[j - 1] & jumpButton:
                     netDY = stats.dy.val() - jumpStartDY
-                    print "Time to fall-start:"+str(j*DT)
-                    print "Net DY:"+str(netDY)+"; GuessedRGrav:"+str(netDY/(j*DT))
+                    print "Time to fall-start:" + str(j * DT)
+                    print "Net DY:" + str(netDY) + "; GuessedRGrav:" + str(netDY / (j * DT))
+                    model.params["risingGravity"].update(
+                        netDY / (j * DT), i == 0)
                     jumpFallStartFrame = j
                     # just transitioned to falling.
                     # We know that because by construction we don't jump (much)
                     # longer than it helps to do so.
                     acc = model.params["risingGravity"].val()
                     expectedDY = lastDY + acc * DT
-                    difference = abs(stats.dy.lastVal - expectedDY)
+                    difference = stats.dy.lastVal - expectedDY
                     print "DY: " + str(stats.dy.lastVal) + " Expected: " + str(expectedDY) + " delta: " + str(difference)
-                    if abs(difference) > 0.1:
-                        print "Velocity jump by " + str(difference) + "; Is it constant or an expr?"
+                    # TODO: Should only update earlyOutClipVel if I _usually_
+                    # reset to the same value.
+                    if (difference >
+                            model.params["risingGravity"].val() * DT * 2 or
+                        difference >
+                            model.params["gravity"].val() * DT * 2):
+                        print "Clip Y vel from:" + str(lastDY) + " to " + str(stats.dy.val()) + "/" + str(stats.dy.lastVal)
+                        model.params["earlyOutClipVel"].update(
+                            stats.dy.lastVal,
+                            # HACK: to clobber the giant initial value
+                            len(model.params[
+                                "earlyOutClipVel"].allVals) == 1
+                        )
                 else:
+                    pass
                     # aggregate falling gravity
-                    model.params["gravity"].update(
-                        stats.ddy.lastVal, i == 0 and (jvec[j - 1] & jumpButton))
-                    print "-->" + str(model.params["gravity"].val())
-            elif (not startedJump and j > stats.smooth): # jump hasn't started yet? probably won't ever!
+                    # model.params["gravity"].update(
+                    #    stats.ddy.lastVal, i == 0 and (jvec[j - 1] & jumpButton))
+                    # print "-->" + str(model.params["gravity"].val())
+                    # jump hasn't started yet? probably won't ever!
+            elif (not startedJump and j > stats.smooth):
                 break
             elif (startedJump and j > stats.smooth and stats.y.lastVal == startY):
                 netDY = stats.dy.val()
                 f = j - jumpFallStartFrame
-                print "Time to ground:"+str(f*DT)
-                print "Net DY:"+str(netDY)+"; GuessedGGrav:"+str(netDY/(f*DT))
+                print "Time to ground:" + str(f * DT)
+                print "Net DY:" + str(netDY) + "; GuessedGGrav:" + str(netDY / (f * DT))
+                model.params["gravity"].update(netDY / (f * DT), i == 0)
                 break
+        plt.figure(1)
+        plt.plot(stats.y.allVals, '+-')
+        plt.figure(2)
+        plt.gca().invert_yaxis()
+        plt.plot(stats.dy.allVals, 'x-')
+        plt.savefig('dys' + str(i))
+        plt.close(2)
         emu.load(start)
+    plt.figure(1)
+    plt.title('Yvals')
+    plt.gca().invert_yaxis()
+    plt.savefig('ys')
+    plt.close(1)
     print "Param Results:"
     print "JSS>" + str(model.params["jumpStartSpeed"].val())
     print "RG->" + str(model.params["risingGravity"].val())
+    print "CLP>" + str(model.params["earlyOutClipVel"].val())
     print "G-->" + str(model.params["gravity"].val())
 
 
-def go(game):
+def go():
+    jumpButton = A
+    games = {
+        "mario": (
+            "mario.nes",
+            (hold(0x0, 120) + hold(START | jumpButton, 30) +
+             hold(0x0, 150)),
+            marioGetX,
+            marioGetY
+        ),
+        "metroid": (
+            "metroid.nes",
+            (hold(0x0, 60) + hold(START, 1) + hold(0x0, 15) +
+             hold(START, 1) + hold(0x0, 600) + hold(LEFT, 400) +
+             hold(RIGHT, 30)),
+            metroidGetX,
+            metroidGetY
+        )
+    }
+    (game, startInputs, getx, gety) = games["mario"]
     total = 0
     emu = fceulib.runGame(game)
-    jumpButton = A
-    startInputsMario = hold(0x0, 120) + hold(START | jumpButton, 30) + hold(0x0, 150)
-    startInputsMetroid = hold(0x0, 60) + hold(START, 1) + hold(0x0, 15) + hold(START, 1) + hold(0x0, 600) + hold(LEFT, 400) + hold(RIGHT, 30)
-    startInputs = startInputsMetroid
     for m in startInputs:
         total = total + 1
         emu.step(m, 0x0)
@@ -561,17 +662,23 @@ def go(game):
     emu.save(start)
     print("SAVED")
     outputImage(emu, "start")
-    findJumpHoldLimit(emu, start, metroidGetX, metroidGetY, jumpButton, marioModel)
-    findJumpAccs(emu, start, metroidGetX, metroidGetY, jumpButton, marioModel)
+    findJumpHoldLimit(emu, start, getx, gety, jumpButton, marioModel)
+    findJumpAccs(emu, start, getx, gety, jumpButton, marioModel)
 
-    testInputs = hold(jumpButton, int(marioModel.params["maxButtonDuration"].val()/DT)+1) + hold(0x0, int(0.8/DT))
+    maxJump = marioModel.params["maxButtonDuration"].val()
+    testInputs = (hold(jumpButton, int(maxJump / DT) + 1) +
+                  hold(0x0, int(0.8 / DT)))
     emu.load(start)
-    # TODO: see if error is improved by using either guessedWhatever or the frame by frame Whatever (is this the same as open vs closed loop?)
+    # TODO: see if error is improved by using either guessedWhatever or the frame by frame Whatever (is this the same as closed vs open loop?)
     # TODO: Analyze the errors.  First off, it looks like model.y is wrong from "down" onwards.  It also never quite gets as high as the real emulator does in Y.
-    #  It looks like there's also weirdness (expected weirdness?) around landing. I think if I told the model when y=startY as a collision, we would be well good. A position error of 51 seems pretty wrong.
-    (net,_,byState) = calcError(marioModel, emu, metroidGetX, metroidGetY, jumpButton, testInputs)
-    print "Net error:"+str(net)
-    print "By state:"+str(byState)
+    #  It looks like there's also weirdness (expected weirdness?) around landing. I think if I told the model when y=startY as a collision, we would be well good. A position error of 51 seems pretty wrong
+    #  ... rising accel is not too far off (compared to an estimate of r=g=300 it's still too strong I think?). falling accel is way overestimated (and in fact is not seemingly that great for down either....?). why?
+    (net, gross, byStep, byState) = calcError(marioModel,
+                                              emu, getx, gety,
+                                              jumpButton, testInputs)
+    print "Gross error:" + str(gross)
+    print "Net error:" + str(net)
+    print "By state:" + str(byState)
     # for now: hard-code mario x y pointers, but derive velocity numerically
     # we want to note:
     #  starting y position
@@ -607,4 +714,4 @@ def go(game):
     #  Minimum Jump Duration s (duplicated for some reason)
 
 if __name__ == "__main__":
-    go('metroid.nes')
+    go()
