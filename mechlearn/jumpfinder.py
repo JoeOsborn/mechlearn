@@ -397,6 +397,7 @@ def calcError(model, emulator, xget, yget, jumpButton, actions):
     netErrors = [0, 0, 0, 0, 0, 0]
     grossErrors = [0, 0, 0, 0, 0, 0]
     stats = Stats(startX, startY)
+    estStats = Stats(startX, startY)
     for (i, m) in enumerate(actions):
         # TODO: buttons for real
         # TODO: collisions
@@ -406,6 +407,8 @@ def calcError(model, emulator, xget, yget, jumpButton, actions):
             m,
             stats
         )
+        estStats.y.update(v.variables[("y", 0)])
+        estStats.dy.update(v.variables[("y", 1)])
         # TODO: hack because I don't deal with collision yet for the model
         if yget(emulator) == startY and i > 5:
             break
@@ -418,6 +421,18 @@ def calcError(model, emulator, xget, yget, jumpButton, actions):
             grossErrors[i] += abs(hereErrors[i])
             netErrorsByState[v.state][i] += abs(hereErrors[i])
         errorsByFrame.append(hereErrors)
+    plt.figure(1)
+    plt.plot(stats.y.allVals, '+-')
+    plt.plot(estStats.y.allVals, "x-")
+    plt.gca().invert_yaxis()
+    plt.savefig('test-ys')
+    plt.close(1)
+    plt.figure(2)
+    plt.plot(stats.dy.allVals, '+-')
+    plt.plot(estStats.dy.allVals, "x-")
+    plt.gca().invert_yaxis()
+    plt.savefig('test-dys')
+    plt.close(2)
     return (netErrors, grossErrors, errorsByFrame, netErrorsByState)
 
 
