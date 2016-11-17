@@ -645,6 +645,45 @@ def findJumpAccs(emu, start, getx, gety, jumpButton, model):
     print "G-->" + str(model.params["gravity"].val())
 
 
+def runTrials(emu, start, getx, gety, jumpButton):
+    # FIXME: Quite domain specific
+    maxHeldFrames = 120
+    jumpInputs = [hold(jumpButton, t) + hold(0x0, 600)
+                  for t in range(1, maxHeldFrames + 1)]
+    startX = getx(emu)
+    startY = gety(emu)
+    trials = []
+    length = 0
+    for (i, jvec) in enumerate(jumpInputs):
+        stats = Stats(startX, startY, 5)
+        for (j, move) in enumerate(jvec):
+            emu.step(move, 0x0)
+            nowX = getx(emu)
+            nowY = gety(emu)
+            # can also aggregate other useful stuff into stats later
+            stats.update(nowX, nowY)
+            if gety(emu) == startY and j > 5:
+                break
+        if j == length:
+            break
+        length = j
+        trials.append((jvec[0:j], stats))
+        plt.figure(1)
+        plt.plot(stats.y.allVals, '+-')
+        plt.figure(2)
+        plt.gca().invert_yaxis()
+        plt.plot(stats.dy.allVals, 'x-')
+        plt.savefig('trials/dys' + str(i))
+        plt.close(2)
+        emu.load(start)
+    plt.figure(1)
+    plt.title('Yvals')
+    plt.gca().invert_yaxis()
+    plt.savefig('trials/ys')
+    plt.close(1)
+    return trials
+
+
 def go():
     jumpButton = A
     games = {
