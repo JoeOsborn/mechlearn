@@ -2,6 +2,12 @@
 *.pyc
 cc-lib/*.o
 batman_*.png
+dys*.png
+ys.png
+loss.png
+simsys.png
+start.png
+test-*.png
 *.nes
 *.so
 *.dSYM
