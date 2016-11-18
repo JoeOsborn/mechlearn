@@ -648,12 +648,14 @@ def findJumpAccs(emu, start, getx, gety, jumpButton, model):
 def runTrials(emu, start, getx, gety, jumpButton):
     # FIXME: Quite domain specific
     maxHeldFrames = 120
+    minHeldFrames = 1
     jumpInputs = [hold(jumpButton, t) + hold(0x0, 600)
-                  for t in range(1, maxHeldFrames + 1)]
+                  for t in range(minHeldFrames, maxHeldFrames + 1)]
     startX = getx(emu)
     startY = gety(emu)
     trials = []
     length = 0
+    shortestJump = 0
     for (i, jvec) in enumerate(jumpInputs):
         stats = Stats(startX, startY, 5)
         for (j, move) in enumerate(jvec):
@@ -663,8 +665,10 @@ def runTrials(emu, start, getx, gety, jumpButton):
             # can also aggregate other useful stuff into stats later
             stats.update(nowX, nowY)
             if gety(emu) == startY and j > 5:
+                if i == 0:
+                    shortestJump = j
                 break
-        if j == length:
+        if j == length and j > shortestJump:
             break
         length = j
         trials.append((jvec[0:j], stats))
