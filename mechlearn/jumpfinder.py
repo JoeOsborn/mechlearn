@@ -125,12 +125,12 @@ class HA:
             elif cur > hi:
                 val.variables[var] = hi
 
-    def step(self, val, dt, buttons):
+    def step(self, val, dt, buttons, collisions):
         s = self.states[val.state]
-        self.continuousStep(val, s.flows, dt)
-        self.discreteStep(val, s.transitions, buttons)
+        self.continuousStep(val, s.flows, dt, collisions)
+        self.discreteStep(val, s.transitions, buttons, collisions)
 
-    def continuousStep(self, val, flows, dt):
+    def continuousStep(self, val, flows, dt, collisions):
         for v in self.variableNames:
             x = self.toValue(flows.get((v, 0), 0.0), val)
             dx = self.toValue(flows.get((v, 1), 0.0), val)
@@ -155,9 +155,9 @@ class HA:
         val.timeInState += dt
         val.time += dt
 
-    def discreteStep(self, val, transitions, buttons):
+    def discreteStep(self, val, transitions, buttons, collisions):
         for t in transitions:
-            if t.guardSatisfied(self, val, buttons):
+            if t.guardSatisfied(self, val, buttons, collisions):
                 # print ("Follow: " + val.state + " -> " + t.target + " via " +
                 #        str(t.guard))
                 for k, v in (t.update or {}).items():
@@ -223,14 +223,20 @@ class HATransition:
         self.guard = guard
         self.update = update
 
-    def guardSatisfied(self, m, val, buttons):
+    def guardSatisfied(self, m, val, buttons, collisions):
         for g in self.guard:
-            return self.primitiveGuardSatisfied(m, g, val, buttons)
+            if not self.primitiveGuardSatisfied(m,
+                                                g,
+                                                val,
+                                                buttons,
+                                                collisions):
+                return False
+        return True
 
-    def primitiveGuardSatisfied(self, m, g, val, buttons):
+    def primitiveGuardSatisfied(self, m, g, val, buttons, collisions):
         gt = g[0]
         if gt == "not":
-            return not self.primitiveGuardSatisfied(m, g[1], val, buttons)
+            return not self.primitiveGuardSatisfied(m, g[1], val, buttons, collisions)
         elif gt == "button":
             # TODO: distinguish pressed/on and released/off
             if g[1] == "pressed" and g[2] in buttons:
@@ -243,7 +249,9 @@ class HATransition:
                 return True
             return False
         elif gt == "colliding":
-            # TODO
+            for side, ctype in collisions:
+                if g[1] == side and g[2] == ctype:
+                    return True
             return False
         elif gt == "timer":
             return val.timeInState >= m.toValue(g[1], val)
@@ -366,7 +374,7 @@ def calcErrorStep(model, val,
                   jumpButton,
                   m,
                   stats):
-    model.step(val, DT, set(["jump"] if m & jumpButton else []))
+    model.step(val, DT, set(["jump"] if m & jumpButton else []), set([]))
     emulator.step(m, 0x0)
     nowX = xget(emulator)
     nowY = yget(emulator)
@@ -669,7 +677,10 @@ def runTrials(emu, start, getx, gety, jumpButton):
                     shortestJump = j
                 break
         if j == length and j > shortestJump:
+            maxHeldFrames = i
             break
+        if j == length and j == shortestJump:
+            minHeldFrames = i
         length = j
         trials.append((jvec[0:j], stats))
         plt.figure(1)
@@ -685,7 +696,7 @@ def runTrials(emu, start, getx, gety, jumpButton):
     plt.gca().invert_yaxis()
     plt.savefig('trials/ys')
     plt.close(1)
-    return trials
+    return trials, minHeldFrames, maxHeldFrames
 
 
 def go():
