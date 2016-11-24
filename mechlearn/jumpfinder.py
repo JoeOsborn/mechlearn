@@ -7,14 +7,6 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-"""
-Character learning has two components.  First, we need to learn the structure of the automaton representing the automaton.  ProbFOIL, a relational learning library built on top of ProbLog, seems a natural choice---at any rate, it remains for future work.
-
-Once we have a structure, we can fit parameters to that structure.  Example parameters include the dynamics of each state and any parameters on guards.  Since we only consider one character at a time, we can abstract the environment into occluding collisions, non-occluding collisions, and hostile collisions.
-
-We'll work with non-hierarchical, non-concurrent hybrid automata for now.  Also, we'll assume left and right movement are mirrored.  Our representation of a state will define, for each variable, whether it has a constant velocity or a constant acceleration (and what that value is); and what transitions are available under what circumstances (a conjunction of abstracted inputs, continuous variable thresholds, timers, any collisions of any type at any normal to the character, and negations of the same).  A state machine is a set of states and an initial state.
-"""
-
 
 class Stat:
 
@@ -160,8 +152,11 @@ class HA:
             if t.guardSatisfied(self, val, buttons, collisions):
                 # print ("Follow: " + val.state + " -> " + t.target + " via " +
                 #        str(t.guard))
+                new_vars = dict()
                 for k, v in (t.update or {}).items():
-                    val.variables[k] = self.toValue(v, val)
+                    new_vars[k] = self.toValue(v, val)
+                for k, v in new_vars.items():
+                    val.variables[k] = v
                 if val.state != t.target:
                     val.state = t.target
                     val.timeInState = 0
@@ -173,15 +168,28 @@ class HA:
             if isinstance(p, Stat):
                 return p.val()
             else:
-                return float(p)
+                return self.toValue(p, valuation)
         elif expr in valuation.variables:
             return float(valuation.variables[expr])
-        elif isinstance(expr, tuple) and expr[0] == "max":
-            return max(self.toValue(expr[1], valuation),
-                       self.toValue(expr[2], valuation))
-        elif isinstance(expr, tuple) and expr[0] == "min":
-            return min(self.toValue(expr[1], valuation),
-                       self.toValue(expr[2], valuation))
+        elif isinstance(expr, tuple):
+            if expr[0] == "max":
+                return max(self.toValue(expr[1], valuation),
+                           self.toValue(expr[2], valuation))
+            elif expr[0] == "min":
+                return min(self.toValue(expr[1], valuation),
+                           self.toValue(expr[2], valuation))
+            elif expr[0] == "abs":
+                return abs(self.toValue(expr[1], valuation))
+            elif expr[0] == "+":
+                return self.toValue(expr[1], valuation) + self.toValue(expr[2], valuation)
+            elif expr[0] == "-":
+                return self.toValue(expr[1], valuation) - self.toValue(expr[2], valuation)
+            elif expr[0] == "*":
+                return self.toValue(expr[1], valuation) * self.toValue(expr[2], valuation)
+            elif expr[0] == "/":
+                return self.toValue(expr[1], valuation) / self.toValue(expr[2], valuation)
+            else:
+                raise "Unrecognized expr", expr
         elif isinstance(expr, numbers.Number):
             return expr
         print "Default expr:" + str(expr) + " type:" + str(type(expr))
@@ -293,6 +301,7 @@ marioModel = HA(
      "maxButtonDuration": Stat(100000.0, None),
      "minButtonDuration": Stat(0.0, None),
      "earlyOutClipVel": Stat(-100000.0, "interesting_mode"),
+     "jumpToFallStartSpeed": Stat(0.0, None),
      # Just for curiosity/info
      "longestJump": Stat(0, None)},
     {"x": 0, "y": 0},
@@ -320,7 +329,7 @@ marioModel = HA(
                          # Use _max_ here because negative Y is up, positive Y
                          # is down.  The point of this is to bring Y closer to
                          # downwards when you leave up.
-                         {("y", 1): ("max", ("y", 1), "earlyOutClipVel")})
+                         {("y", 1): "jumpToFallStartSpeed"})
         ]),
         "down": HAState({("y", 2): "gravity"}, [
             # this edge may not always be present.
@@ -696,7 +705,7 @@ def runTrials(emu, start, getx, gety, jumpButton):
     plt.gca().invert_yaxis()
     plt.savefig('trials/ys')
     plt.close(1)
-    return trials, minHeldFrames, maxHeldFrames
+    return trials[minHeldFrames:maxHeldFrames], minHeldFrames, maxHeldFrames
 
 
 def go():
