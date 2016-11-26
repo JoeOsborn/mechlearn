@@ -1,0 +1,55 @@
+#+Title: Learning Game Rules by Hypothesis-Fitting
+
+
+* Background
+** Model checking games is really hard, in part because:
+*** Games are extremely long (many moves)
+*** Most game states are unreachable
+*** Game level sections/enemy encounters/etc defy compositional reasoning 
+**** (compare vs. a function in a conventional program: known, small set of inputs and outputs, can abstract details of called functions away, etc)
+** It is a real bummer to have "a complete play trace starting from the beginning of the game/level/etc" as your starting point for all (generic) analysis.
+** Also, game rule learning does not have very solid knowledge representation yet (mostly "stimulus-response" kind of stuff for fixed sets of mechanics)
+* glEnd() of Zelda
+** Tom7 had this cool project
+** It had two really interesting ideas:
+*** Look at the graphics card memory rather than the framebuffer/output pixels to get high level features for free
+**** And fuse small sprites into big ones by looking for sprites which are adjacent to each other and remain so
+*** Perform experiments to prove properties of interest about the game:
+**** Figure out which sprite is controlled by the player by comparing divergence after holding left, holding right, or standing still (from the same start state)
+**** Tie locations in system RAM to e.g. sprite X,Y by seeing if modifying the address once and then waiting a frame causes the sprite to draw in a different place
+**** See if there's gravity by putting player in the sky and then resuming play without any other inputs (does the player fall?)
+**** See if a tile is a collider or not by putting the player next to it and having them move
+** This was really good for the automatic 3D-ification of NES games, but how could we generalize it to non-NES games, or to other kinds of properties?
+* Formalizing the above: property-based testing over forward models with OL-derived property language
+** Insight: Generating interesting game states (to discover some rule) is like property-based testing
+** Even if generated states are unreachable (from the initial state), they may still be informative for search/model-checking/design support/etc
+*** Consider:  It's helpful to know that Mario could get from point B to point C _if_ point B were reachable from point A: that suggests a design repair!
+** Same insight as e.g. RRTs: it'd be great to sample from the space of possible game states
+*** Unlike RRTs, that space is too big and sparse.
+** Property-based testing is generators + property-checkers (which we can generalize to property-fitters).
+** So what are generators like?
+*** Could randomize game variables from some starting state, but game code may be sensitive to sudden teleports, hard to think about creating/destroying objects, firing off actions, etc
+*** Could perform random (or directed random) actions from some starting state and sample the resulting states for the property
+*** Useful trick for both of the above: If we had a play trace, e.g. a speed-run, we could sample from that for "reasonably reachable" starting states.
+  Generators compose!
+** So what are properties like?
+*** Oh hey, we have OLs lying around
+**** Players seem to form strictly-incorrect but useful models/abstractions of games all the time. We could do the same.
+**** Players can pick up one game after playing another by adapting their model of one game to another along OL lines.
+**** Games that use the same OLs in similar ways (especially towards playable-modeling the same systems) are more similar than they are different, even if the mechanics are quite distinct
+* Fitting properties and drawing higher-order conclusions with probabilistic programming
+
+* Doing stuff on the NES with graphical logics in particular
+
+* And finally, the specific things we're thinking of doing
+** Sprite fusion in space and time
+** Migrating game entity identities between tiles and sprites
+** Scroll detection
+** Identifying tile types/collisions/enemies vs non-enemies/etc
+** Identifying resource pickups
+** Auto-mapping based on speedrun
+** Auto-mapping based on local heuristic exploration/teleporting/etc (plus speedrun to get between scroll zones)
+** Jump model fitting
+** Game character HA learning (general case of above)
+* Other future work
+** Other emulators/domains: SNES, CPS2 (fighting game character learning), "reusable gameplay trace samplers"...

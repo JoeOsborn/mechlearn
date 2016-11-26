@@ -178,6 +178,11 @@ class HA:
             elif expr[0] == "min":
                 return min(self.toValue(expr[1], valuation),
                            self.toValue(expr[2], valuation))
+            elif expr[0] == "clip":
+                v = self.toValue(expr[1], valuation)
+                return min(max(v,
+                               self.toValue(expr[2], valuation)),
+                           self.toValue(expr[3], valuation))
             elif expr[0] == "abs":
                 return abs(self.toValue(expr[1], valuation))
             elif expr[0] == "+":
@@ -189,7 +194,7 @@ class HA:
             elif expr[0] == "/":
                 return self.toValue(expr[1], valuation) / self.toValue(expr[2], valuation)
             else:
-                raise "Unrecognized expr", expr
+                raise Exception("Unrecognized expr", expr)
         elif isinstance(expr, numbers.Number):
             return expr
         print "Default expr:" + str(expr) + " type:" + str(type(expr))
