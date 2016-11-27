@@ -127,6 +127,9 @@ class HA:
             x = self.toValue(flows.get((v, 0), 0.0), val)
             dx = self.toValue(flows.get((v, 1), 0.0), val)
             ddx = self.toValue(flows.get((v, 2), 0.0), val)
+            assert isinstance(x, numbers.Number), str(x)
+            assert isinstance(dx, numbers.Number), str(dx)
+            assert isinstance(ddx, numbers.Number), str(ddx)
             oldX = val.variables[(v, 0)]
             oldDX = val.variables[(v, 1)]
             if x != 0:
@@ -155,6 +158,7 @@ class HA:
                 new_vars = dict()
                 for k, v in (t.update or {}).items():
                     new_vars[k] = self.toValue(v, val)
+                    assert float(new_vars[k])
                 for k, v in new_vars.items():
                     val.variables[k] = v
                 if val.state != t.target:
@@ -163,22 +167,24 @@ class HA:
                 break
 
     def toValue(self, expr, valuation):
-        if expr in self.params:
+        if isinstance(expr, Stat):
+            return expr.val()
+        elif expr in self.params:
             p = self.params[expr]
-            if isinstance(p, Stat):
-                return p.val()
-            else:
-                return self.toValue(p, valuation)
+            return self.toValue(p, valuation)
         elif expr in valuation.variables:
             return float(valuation.variables[expr])
         elif isinstance(expr, tuple):
             if expr[0] == "max":
+                assert len(expr) == 3
                 return max(self.toValue(expr[1], valuation),
                            self.toValue(expr[2], valuation))
             elif expr[0] == "min":
+                assert len(expr) == 3
                 return min(self.toValue(expr[1], valuation),
                            self.toValue(expr[2], valuation))
             elif expr[0] == "clip":
+                assert len(expr) == 4
                 v = self.toValue(expr[1], valuation)
                 return min(max(v,
                                self.toValue(expr[2], valuation)),
@@ -186,19 +192,23 @@ class HA:
             elif expr[0] == "abs":
                 return abs(self.toValue(expr[1], valuation))
             elif expr[0] == "+":
+                assert len(expr) == 3
                 return self.toValue(expr[1], valuation) + self.toValue(expr[2], valuation)
             elif expr[0] == "-":
+                assert len(expr) == 3
                 return self.toValue(expr[1], valuation) - self.toValue(expr[2], valuation)
             elif expr[0] == "*":
+                assert len(expr) == 3
                 return self.toValue(expr[1], valuation) * self.toValue(expr[2], valuation)
             elif expr[0] == "/":
+                assert len(expr) == 3
                 return self.toValue(expr[1], valuation) / self.toValue(expr[2], valuation)
             else:
                 raise Exception("Unrecognized expr", expr)
         elif isinstance(expr, numbers.Number):
             return expr
-        print "Default expr:" + str(expr) + " type:" + str(type(expr))
-        return expr
+        else:
+            raise Exception("Unrecognized expr", expr)
 
 
 class HAVal:
