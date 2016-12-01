@@ -491,6 +491,13 @@ mario_y = 0x00CE
 metroid_x = 0x0051
 metroid_y = 0x0052
 
+cv_x = 0x038C
+cv_y = 0x0354
+
+mm_x = 0x022
+mm_y = 0x025
+
+
 imgBuffer = VectorBytes()
 
 
@@ -510,6 +517,22 @@ def marioGetX(emu):
 
 def marioGetY(emu):
     return emu.fc.fceu.RAM[mario_y]
+
+
+def cvGetX(emu):
+    return emu.fc.fceu.RAM[cv_x]
+
+
+def cvGetY(emu):
+    return emu.fc.fceu.RAM[cv_y]
+
+
+def mmGetX(emu):
+    return emu.fc.fceu.RAM[mm_x]
+
+
+def mmGetY(emu):
+    return emu.fc.fceu.RAM[mm_y]
 
 
 def metroidGetX(emu):
@@ -694,23 +717,17 @@ def runTrials(emu, start, getx, gety, jumpButton):
     startX = getx(emu)
     startY = gety(emu)
     trials = []
-    length = 0
-    shortestJump = 0
     for (i, jvec) in enumerate(jumpInputs):
         stats = Stats(startX, startY, 5)
         for (j, move) in enumerate(jvec):
             emu.step(move, 0x0)
             nowX = getx(emu)
             nowY = gety(emu)
+            #print j, move, nowX, nowY
             # can also aggregate other useful stuff into stats later
             stats.update(nowX, nowY)
             if gety(emu) == startY and j > 5:
-                if i == 0:
-                    shortestJump = j
                 break
-        if j == length and j > shortestJump:
-            maxHeldFrames = i+1
-        length = j
         trials.append((jvec[0:j], stats))
         plt.figure(1)
         plt.plot(stats.y.allVals, '+-')
@@ -720,25 +737,28 @@ def runTrials(emu, start, getx, gety, jumpButton):
         plt.savefig('trials/dys' + str(i))
         plt.close(2)
         emu.load(start)
-        if maxHeldFrames == i+1:
-            break
     # find first index when count of moves does not go up
     shortest = len(trials[0][0])
+    longest = len(trials[-1][0])
     shortesti = minHeldFrames-1
+    longesti = maxHeldFrames-1
     for i, (moves, stats) in enumerate(trials):
         if len(moves) == shortest:
-            shortesti = i
-        else:
-            break
-    minHeldFrames = shortesti + 1
-    maxHeldFrames = len(trials)
+            shortesti = max(i,shortesti)
+        if len(moves) == longest:
+            longesti = min(i,longesti)
+    maxHeldFrames = longesti + 1
+    minHeldFrames = min(maxHeldFrames, shortesti + 1)
     plt.figure(1)
     plt.title('Yvals')
     plt.gca().invert_yaxis()
     plt.savefig('trials/ys')
     plt.close(1)
-    return trials[shortesti:maxHeldFrames], minHeldFrames, maxHeldFrames
+    return trials[minHeldFrames-1:maxHeldFrames], minHeldFrames, maxHeldFrames
 
+# Moving trials:
+# start moving right, find the fastest speed
+# then try trials at min speed, max * 0.25, max * 0.5, max * 0.75, max with shortest hold and longest hold.
 
 def go():
     jumpButton = A
