@@ -311,37 +311,48 @@ and we can start accounting for 3 later (maybe with a Boolean parameter?).
 
 marioModel = HA(
     {"gravity": Stat(0.0, None),
-     "jumpStartSpeed": Stat(0.0, None),
+     "groundToUpControlDYReset": Stat(0.0, None),
      "terminalVY": Stat(100000.0, None),
-     "risingGravity": Stat(0.0, None),
+     "up-control-gravity": Stat(0.0, None),
+     "up-fixed-gravity": Stat(0.0, None),
      "maxButtonDuration": Stat(100000.0, None),
      "minButtonDuration": Stat(0.0, None),
-     "earlyOutClipVel": Stat(-100000.0, "interesting_mode"),
-     "jumpToFallStartSpeed": Stat(0.0, None),
-     # Just for curiosity/info
-     "longestJump": Stat(0, None)},
+     "upControlToUpFixedDYReset": Stat(0.0, None)},
     {"x": 0, "y": 0},
     {("y", 1): (-1000000.0, "terminalVY")},
     {
         "ground": HAState({("y", 1): 0}, [
-            HATransition("up",
+            HATransition("up-control",
                          [("button", "pressed", "jump")],
-                         {("y", 1): "jumpStartSpeed"}),
+                         {("y", 1): "groundToUpControlDYReset"}),
             HATransition("down",
                          [("not", ("colliding", "bottom", "ground"))],
                          None)
         ]),
-        "up": HAState({("y", 2): "risingGravity"}, [
+        "up-control": HAState({("y", 2): "up-control-gravity"}, [
             # This edge may not always be present.
             HATransition("down",
                          [("colliding", "top", "ground")],
                          {("y", 1): 0}),
             HATransition("down",
+                         [("gte", ("y", 1), 0)],
+                         None),
+            HATransition("up-fixed",
                          [("timer", "maxButtonDuration")],
-                         {("y", 1): "jumpToFallStartSpeed"}),
+                         {("y", 1): "upControlToUpFixedDYReset"}),
+            HATransition("up-fixed",
+                         [("button", "off", "jump"),
+                          ("timer", "minButtonDuration")],
+                         {("y", 1): "upControlToUpFixedDYReset"})
+        ]),
+        "up-fixed": HAState({("y", 2): "up-fixed-gravity"}, [
+            # This edge may not always be present.
             HATransition("down",
-                         [("button", "off", "jump")],
-                         {("y", 1): "jumpToFallStartSpeed"})
+                         [("colliding", "top", "ground")],
+                         {("y", 1): 0}),
+            HATransition("down",
+                         [("gte", ("y", 1), 0)],
+                         None)
         ]),
         "down": HAState({("y", 2): "gravity"}, [
             # this edge may not always be present.
