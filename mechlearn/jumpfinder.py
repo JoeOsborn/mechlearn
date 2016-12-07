@@ -119,8 +119,9 @@ class HA:
 
     def step(self, val, dt, buttons, collisions):
         s = self.states[val.state]
-        self.continuousStep(val, s.flows, dt, collisions)
+        # TODO: continuous before discrete?
         self.discreteStep(val, s.transitions, buttons, collisions)
+        self.continuousStep(val, s.flows, dt, collisions)
 
     def continuousStep(self, val, flows, dt, collisions):
         for v in self.variableNames:
@@ -158,7 +159,7 @@ class HA:
                 new_vars = dict()
                 for k, v in (t.update or {}).items():
                     new_vars[k] = self.toValue(v, val)
-                    assert float(new_vars[k])
+                    assert isinstance(new_vars[k], numbers.Number), str(new_vars[k])
                 for k, v in new_vars.items():
                     val.variables[k] = v
                 if val.state != t.target:
@@ -289,7 +290,7 @@ class HATransition:
         elif gt == "lt":
             return m.toValue(g[1], val) < m.toValue(g[2], val)
         else:
-            raise ("Unrecognized Guard", g)
+            raise Exception("Unrecognized Guard", g)
 
 DT = 1.0 / 60.0
 
@@ -310,41 +311,48 @@ and we can start accounting for 3 later (maybe with a Boolean parameter?).
 
 marioModel = HA(
     {"gravity": Stat(0.0, None),
-     "jumpStartSpeed": Stat(0.0, None),
+     "groundToUpControlDYReset": Stat(0.0, None),
      "terminalVY": Stat(100000.0, None),
-     "risingGravity": Stat(0.0, None),
+     "up-control-gravity": Stat(0.0, None),
+     "up-fixed-gravity": Stat(0.0, None),
      "maxButtonDuration": Stat(100000.0, None),
      "minButtonDuration": Stat(0.0, None),
-     "earlyOutClipVel": Stat(-100000.0, "interesting_mode"),
-     "jumpToFallStartSpeed": Stat(0.0, None),
-     # Just for curiosity/info
-     "longestJump": Stat(0, None)},
+     "upControlToUpFixedDYReset": Stat(0.0, None)},
     {"x": 0, "y": 0},
     {("y", 1): (-1000000.0, "terminalVY")},
     {
         "ground": HAState({("y", 1): 0}, [
-            HATransition("up",
+            HATransition("up-control",
                          [("button", "pressed", "jump")],
-                         {("y", 1): "jumpStartSpeed"}),
+                         {("y", 1): "groundToUpControlDYReset"}),
             HATransition("down",
                          [("not", ("colliding", "bottom", "ground"))],
                          None)
         ]),
-        "up": HAState({("y", 2): "risingGravity"}, [
+        "up-control": HAState({("y", 2): "up-control-gravity"}, [
             # This edge may not always be present.
             HATransition("down",
                          [("colliding", "top", "ground")],
                          {("y", 1): 0}),
             HATransition("down",
-                         [("timer", "maxButtonDuration")],
+                         [("gte", ("y", 1), 0)],
                          None),
-            HATransition("down",
+            HATransition("up-fixed",
+                         [("timer", "maxButtonDuration")],
+                         {("y", 1): "upControlToUpFixedDYReset"}),
+            HATransition("up-fixed",
                          [("button", "off", "jump"),
                           ("timer", "minButtonDuration")],
-                         # Use _max_ here because negative Y is up, positive Y
-                         # is down.  The point of this is to bring Y closer to
-                         # downwards when you leave up.
-                         {("y", 1): "jumpToFallStartSpeed"})
+                         {("y", 1): "upControlToUpFixedDYReset"})
+        ]),
+        "up-fixed": HAState({("y", 2): "up-fixed-gravity"}, [
+            # This edge may not always be present.
+            HATransition("down",
+                         [("colliding", "top", "ground")],
+                         {("y", 1): 0}),
+            HATransition("down",
+                         [("gte", ("y", 1), 0)],
+                         None)
         ]),
         "down": HAState({("y", 2): "gravity"}, [
             # this edge may not always be present.
@@ -483,6 +491,13 @@ mario_y = 0x00CE
 metroid_x = 0x0051
 metroid_y = 0x0052
 
+cv_x = 0x038C
+cv_y = 0x0354
+
+mm_x = 0x022
+mm_y = 0x025
+
+
 imgBuffer = VectorBytes()
 
 
@@ -502,6 +517,22 @@ def marioGetX(emu):
 
 def marioGetY(emu):
     return emu.fc.fceu.RAM[mario_y]
+
+
+def cvGetX(emu):
+    return emu.fc.fceu.RAM[cv_x]
+
+
+def cvGetY(emu):
+    return emu.fc.fceu.RAM[cv_y]
+
+
+def mmGetX(emu):
+    return emu.fc.fceu.RAM[mm_x]
+
+
+def mmGetY(emu):
+    return emu.fc.fceu.RAM[mm_y]
 
 
 def metroidGetX(emu):
@@ -686,26 +717,17 @@ def runTrials(emu, start, getx, gety, jumpButton):
     startX = getx(emu)
     startY = gety(emu)
     trials = []
-    length = 0
-    shortestJump = 0
     for (i, jvec) in enumerate(jumpInputs):
         stats = Stats(startX, startY, 5)
         for (j, move) in enumerate(jvec):
             emu.step(move, 0x0)
             nowX = getx(emu)
             nowY = gety(emu)
+            #print j, move, nowX, nowY
             # can also aggregate other useful stuff into stats later
             stats.update(nowX, nowY)
             if gety(emu) == startY and j > 5:
-                if i == 0:
-                    shortestJump = j
                 break
-        if j == length and j > shortestJump:
-            maxHeldFrames = i
-            break
-        if j == length and j == shortestJump:
-            minHeldFrames = i
-        length = j
         trials.append((jvec[0:j], stats))
         plt.figure(1)
         plt.plot(stats.y.allVals, '+-')
@@ -715,13 +737,28 @@ def runTrials(emu, start, getx, gety, jumpButton):
         plt.savefig('trials/dys' + str(i))
         plt.close(2)
         emu.load(start)
+    # find first index when count of moves does not go up
+    shortest = len(trials[0][0])
+    longest = len(trials[-1][0])
+    shortesti = minHeldFrames-1
+    longesti = maxHeldFrames-1
+    for i, (moves, stats) in enumerate(trials):
+        if len(moves) == shortest:
+            shortesti = max(i,shortesti)
+        if len(moves) == longest:
+            longesti = min(i,longesti)
+    maxHeldFrames = longesti + 1
+    minHeldFrames = min(maxHeldFrames, shortesti + 1)
     plt.figure(1)
     plt.title('Yvals')
     plt.gca().invert_yaxis()
     plt.savefig('trials/ys')
     plt.close(1)
-    return trials[minHeldFrames:maxHeldFrames], minHeldFrames, maxHeldFrames
+    return trials[minHeldFrames-1:maxHeldFrames], minHeldFrames, maxHeldFrames
 
+# Moving trials:
+# start moving right, find the fastest speed
+# then try trials at min speed, max * 0.25, max * 0.5, max * 0.75, max with shortest hold and longest hold.
 
 def go():
     jumpButton = A
