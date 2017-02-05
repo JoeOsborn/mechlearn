@@ -22,7 +22,7 @@ cp -r ../include/pybind11 /usr/local/include/ # or modify fceulib's makefile to 
 
 cd ../..
 
-cd ../fceulib
+cd fceulib
 make bind
 
 #Do this if you want Python to be able to find it (and don't care abouts setting a virtualenv or the like
@@ -34,5 +34,5 @@ cp fceulib.so ../mechlearn # put the library somewhere Python can find it later
 cd ../mechlearn
 ```
 
-Now we're good to go! IPython does not seem to work but CPython and I think PyPy do.
+Now we're good to go! IPython does not seem to work without messing with load paths, but CPython and I think PyPy do.
 Try copying the bindtest.py script from `../fceulib` over here and it should work fine loaded up in the interpreter (`import bindtest` and `bindtest.go()` if you have a ROM called `mario.nes` in this directory).
