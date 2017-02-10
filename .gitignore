@@ -6,3 +6,4 @@ batman_*.png
 *.so
 *.dSYM
 .ipynb_checkpoints/
+*.pkl

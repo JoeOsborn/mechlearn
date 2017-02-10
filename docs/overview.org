@@ -1,5 +1,9 @@
 #+Title: Learning Game Rules by Hypothesis-Fitting
 
+* Todos:
+** TODO put in material about how models are useful, but writing a formal model of a game is tough, so it would be better to just throw a game at some reverse engineering tool to get an (approximate) model
+*** Similar motivation to property based testing
+*** Kind of an assumption of the rest of the text.
 
 * Background
 ** Model checking games is really hard, in part because:

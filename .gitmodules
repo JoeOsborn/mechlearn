@@ -5,7 +5,7 @@
 [submodule "fceulib"]
 	path = fceulib
 	url = git@github.com:JoeOsborn/tom7-fceulib.git
-	branch = patches
+	branch = master
 [submodule "pybind11"]
 	path = pybind11
 	url = git@github.com:pybind/pybind11.git
