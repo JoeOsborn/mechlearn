@@ -90,9 +90,56 @@ velocities = track[1:, axis] - track[:-1, axis]
 thresholds(velocities)
 
 
+def samey_intervals(vals, t_window=5):
+    last = vals[0]
+    start = -1
+    accum = 0
+    intervals = []
+    for t, v in enumerate(vals):
+        if v != last:
+            accum += 1
+        if last == v:
+            accum = 0
+        if accum > 1:
+            last = v
+            if (t - accum) - start > t_window:
+                intervals.append(start + 1)
+                intervals.append(t - accum)
+                intervals.append(t - accum + 1)
+            start = t - accum
+            accum = 0
+    return intervals
+
+
+def zero_crossings(vals):
+
+    sign_intervals = []
+    last_sign_change = 0
+    vsigns = np.sign(vals)
+    last_sign = vsigns[0]
+
+    zeros = np.zeros(vsigns.shape)
+    zeros[vsigns == 0] = 1
+    accum = 0
+    for t in range(len(zeros)):
+        if zeros[t] == 1:
+            accum += 1
+        else:
+            accum = 0
+        zeros[t] = accum
+    last = 0
+    for t, v in enumerate(zeros):
+        if v == 1:
+            sign_intervals.append(t)
+        elif v == 0 and last > 5:
+            sign_intervals.append(t - 1)
+        last = v
+    return sorted(set(sign_intervals))
+
 # In[ ]:
 
-def samey_intervals(vals, t_window=5):
+
+def samey_intervals_(vals, t_window=5):
     last_diff = 0
     last_diff_t = 0
     intervals = []
@@ -125,7 +172,7 @@ plt.show()
 
 # In[ ]:
 
-def zero_crossings(vals):
+def zero_crossings_(vals):
     sign_intervals = []
     last_sign_change = 0
     vsigns = np.sign(vals)
@@ -155,17 +202,26 @@ plt.xlim((190, 220))
 plt.show()
 
 
+def jumps(vals):
+    return [t for t in range(1, len(vals)) if np.abs(vals[t] - vals[t - 1]) > 1]
+
+
 # In[ ]:
 
 axis = 2
 
-same_window = 10
+same_window = 5
 
 switch_points = set(zero_crossings(velocities))
 
 samey_points = set(samey_intervals(velocities, t_window=same_window))
 
-velocity_times = sorted(switch_points | samey_points)
+jumps = set(jumps(velocities))
+
+velocity_times = sorted(switch_points |
+                        samey_points |
+                        jumps |
+                        set([0, len(velocities) - 1]))
 
 print len(velocity_times)
 
@@ -320,8 +376,9 @@ all_times = all_times[:end_time]  # [:len(all_times)/4]
 print "Points:", len(all_times)
 print all_times
 plt.plot(velocities[:all_times[-1]])
-plt.plot(np.array(all_times), velocities[
-         np.array(all_times, dtype='int')], 'rx')
+plt.plot(np.array(all_times),
+         velocities[np.array(all_times, dtype='int')],
+         'rx')
 plt.show()
 
 # Takahashi Meijin constant, 60 frames / 16 inputs ~= 4 frames per input.
@@ -346,17 +403,18 @@ for i in range(start_time, this_end_time):
     for j in range(i + 1, len(all_times)):
         # TODO: Use min_interval here?
         js = model_set_generate((track, all_times, axis, i, j))
-        the_templates = js[-1]
-        foundOne = False
-        for tn, mod, trace in the_templates:
-            logp = -np.mean([mod.logp(pt) for pt in trace]) / \
-                float(all_times[j] - all_times[i])
-            print logp
-            if logp < min_likelihood:
-                min_likelihood = logp
-                foundOne = True
-        if not foundOne:
-            break
+        # the_templates = js[-1]
+        # foundOne = False
+        # for tn, mod, trace in the_templates:
+        #     dt = float(all_times[j] - all_times[i])
+        #     logp = -np.mean([mod.logp(pt)
+        #                      for pt in trace]) / dt
+        #     print logp
+        #     if logp < min_likelihood:
+        #         min_likelihood = logp
+        #         foundOne = True
+        # if not foundOne:
+        #    break
         likes[i][j] = js
 
 pickle.dump((start_time, end_time, axis, all_times, track, velocities, inputVec, likes),
