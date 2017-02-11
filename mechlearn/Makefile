@@ -21,5 +21,4 @@ MOVIE := Illustrative
 
 .SECONDARY: 
 
-.PHONY: all
-all : $(MOVIE)_modes.pkl $(MOVIE)_edges.pkl $(MOVIE)_collisions.pkl $(MOVIE)_tracks.pkl $(MOVIE).id2sprites.pkl $(MOVIE).txt
+all : $(MOVIE)_modes.pkl $(MOVIE)_edges.pkl
