@@ -1,24 +1,24 @@
-ROM := mario.nes
-MOVIE := Illustrative
-
-# TODO: generate a config file the notebooks can use to get
-# paths for things
-
-%.id2sprites.pkl %.txt : PPUPlayground.ipynb %.fm2 $(ROM)
+id2sprites.pkl : PPUPlayground.ipynb movie.fm2 rom.nes
 	jupyter nbconvert --to html --execute --ExecutePreprocessor.timeout=-1 PPUPlayground.ipynb
 
-%_tracks.pkl : %.txt %.id2sprites.pkl TrackingAndFiltering.ipynb
+tile2colorized.pkl : id2sprites.pkl
+	@
+
+ppu_output.txt :  tile2colorized.pkl
+	@
+
+tracks.pkl : ppu_output.txt id2sprites.pkl TrackingAndFiltering.ipynb
 	jupyter nbconvert --to html --execute --ExecutePreprocessor.timeout=-1 TrackingAndFiltering.ipynb
 
-%_collisions.pkl : %_tracks.pkl Collisions.ipynb
+collisions.pkl : tracks.pkl Collisions.ipynb
 	jupyter nbconvert --to html --execute --ExecutePreprocessor.timeout=-1 Collisions.ipynb
 
-%_modes.pkl : %_tracks.pkl %.fm2 LeastSquares.ipynb
+modes.pkl : tracks.pkl movie.fm2 LeastSquares.ipynb
 	jupyter nbconvert --to html --execute --ExecutePreprocessor.timeout=-1 LeastSquares.ipynb
 
-%_edges.pkl : %_modes.pkl %_collisions.pkl %.fm2 Causes.ipynb
+edges.pkl : modes.pkl collisions.pkl movie.fm2 tile2colorized.pkl Causes.ipynb
 	jupyter nbconvert --to html --execute --ExecutePreprocessor.timeout=-1 Causes.ipynb
 
 .SECONDARY: 
 
-all : $(MOVIE)_modes.pkl $(MOVIE)_edges.pkl
+all : modes.pkl edges.pkl
