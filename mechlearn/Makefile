@@ -16,7 +16,7 @@ collisions.pkl : tracks.pkl Collisions.ipynb
 modes.pkl : tracks.pkl movie.fm2 LeastSquares.ipynb
 	jupyter nbconvert --to html --execute --ExecutePreprocessor.timeout=-1 LeastSquares.ipynb
 
-edges.pkl : modes.pkl collisions.pkl movie.fm2 tile2colorized.pkl Causes.ipynb
+edges.pkl : modes.pkl collisions.pkl movie.fm2 tile2colorized.pkl Causes-Adams.ipynb
 	jupyter nbconvert --to html --execute --ExecutePreprocessor.timeout=-1 Causes.ipynb
 
 .SECONDARY: 
