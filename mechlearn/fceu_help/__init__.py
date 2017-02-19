@@ -118,9 +118,13 @@ def get_all_sprites(fc):
             attr = sprite_attributes_to_dict(sprite_ram[ii+2])
             attributes.append(attr)
             # x, y, idx, bg, pal, hflip, vlip, ppu_regs
+            ppu_values = fc.ppu.values
             output.append([sprite_ram[ii+3]*1.,sprite_ram[ii]*1.+1,sprite_ram[ii+1],
                            attr['background'],attr['palette'],attr['hflip'],attr['vflip'],
-                           fc.ppu.values[:]])
+                           [ppu_values[0],
+                            ppu_values[1],
+                            ppu_values[2],
+                            ppu_values[3]]])
             ids.add(sprite_ram[ii+1])
     sprite_map = {id:get_sprite(id,fc) for id in ids}
     colorized_sprites = []

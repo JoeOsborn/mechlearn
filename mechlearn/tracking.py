@@ -38,14 +38,12 @@ def tracks_from_sprite_data(sprite_data):
     sorted_timesteps = sorted(timesteps)
     for timestep in sorted_timesteps:
         dat = timesteps[timestep]
-        if timestep % 1000 == 0:
-            print timestep
         for ii in range(len(dat)):
             for jj in range(len(dat)):
                 if ii != jj:
                     id1 = dat[ii][0]
-                    sprite1 = dat[ii][2]
-                    sprite2 = dat[jj][2]
+                    sprite1 = dat[ii][1]
+                    sprite2 = dat[jj][1]
                     dx = sprite1[0] - sprite2[0]
                     dy = sprite1[1] - sprite2[1]
                     height1 = 16 if (sprite1[-1][0] & (1 << 5)) else 8
@@ -83,15 +81,13 @@ def tracks_from_sprite_data(sprite_data):
     timesteps_bb = {}
     for timestep in sorted_timesteps:
         dat = timesteps[timestep]
-        if timestep % 1000 == 0:
-            print timestep
         blobs = UnionFind()
         for ii in range(len(dat)):
             for jj in range(len(dat)):
                 if ii != jj:
                     id1 = dat[ii][0]
-                    sprite1 = dat[ii][2]
-                    sprite2 = dat[jj][2]
+                    sprite1 = dat[ii][1]
+                    sprite2 = dat[jj][1]
                     dx = sprite1[0] - sprite2[0]
                     dy = sprite1[1] - sprite2[1]
                     id2 = (dat[jj][0], dx, dy)
@@ -112,11 +108,11 @@ def tracks_from_sprite_data(sprite_data):
             top = float('inf')
             bottom = float('-inf')
             for sprite in sprites:
-                height = 16 if (dat[sprite][2][-1][0] & (1 << 5)) else 8
-                left = min(dat[sprite][2][0], left)
-                right = max(dat[sprite][2][0] + height, right)
-                top = min(dat[sprite][2][1], top)
-                bottom = max(dat[sprite][2][1] + height, bottom)
+                height = 16 if (dat[sprite][1][-1][0] & (1 << 5)) else 8
+                left = min(dat[sprite][1][0], left)
+                right = max(dat[sprite][1][0] + height, right)
+                top = min(dat[sprite][1][1], top)
+                bottom = max(dat[sprite][1][1] + height, bottom)
 
             bounding_boxes[((left + right) / 2,
                             (top + bottom) / 2,
