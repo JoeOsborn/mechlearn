@@ -302,7 +302,7 @@ def test_model(trials, minHold, maxHold, traceLinearAndClip):
         plt.plot(modelModes, "+-", lw=0.6)
     plt.plot(realYs, "o")
     plt.gca().invert_yaxis()
-    plt.show()
+    # plt.show()
 
 
 def hold_durations(trackID, episode_outputs):
@@ -337,6 +337,58 @@ def hold_durations(trackID, episode_outputs):
             min_len_duration = duration
             min_interesting_len = jump_len
     return min_interesting_len, max_interesting_len
+
+
+def model_to_ha(trials, minHold, maxHold, traceLinearAndClip):
+    m = copy.deepcopy(marioModel)
+    s = pm.df_summary(traceLinearAndClip[len(traceLinearAndClip) * 0.7:-1:10])
+    means = s["mean"]
+    print s
+    print "-------\nMeans:\n------"
+    print means
+    print "--------"
+    m.params["gravity"].update(
+        means["down_dy_acc"] / (DT * DT), True)
+    if minHold != maxHold:
+        m.params["up-control-gravity"].update(
+            means["up-control_dy_acc"] / (DT * DT), True)
+    else:
+        # We didn't learn anything for up-control, so use up-fixed instead.
+        m.params["up-control-gravity"].update(
+            means["up-fixed_dy_acc"] / (DT * DT), True)
+    m.params[
+        "up-fixed-gravity"].update(
+            means["up-fixed_dy_acc"] / (DT * DT), True)
+    m.params["minButtonDuration"].update(minHold * DT, True)
+    m.params["maxButtonDuration"].update(maxHold * DT, True)
+
+    if minHold != maxHold:
+        m.params["groundToUpControlDYReset"] = (
+            "+",
+            means["up-control_dy_weights__2"] / DT,
+            ("+",
+             ("*", means["up-control_dy_weights__0"], ("x", 1)),
+             ("*", means["up-control_dy_weights__1"], ("y", 1)))
+        )
+        m.params["upControlToUpFixedDYReset"] = (
+            "+",
+            means["up-fixed_dy_weights__2"] / DT,
+            ("+",
+             ("*", means["up-fixed_dy_weights__0"], ("x", 1)),
+             ("*", means["up-fixed_dy_weights__1"], ("y", 1)))
+        )
+    else:
+        # Some hacking around the HA structure
+        m.params["groundToUpControlDYReset"] = (
+            "+",
+            means["up-fixed_dy_weights__2"] / DT,
+            ("+",
+             ("*", means["up-fixed_dy_weights__0"], ("x", 1)),
+             ("*", means["up-fixed_dy_weights__1"], ("y", 1)))
+        )
+        # Treat up-fixed as a continuation of up-control
+        m.params["upControlToUpFixedDYReset"] = ("y", 1)
+    return m
 
 
 if __name__ == "__main__":
@@ -440,7 +492,26 @@ if __name__ == "__main__":
         print "Test model"
         test_model(trials, min_len, max_len, trace)
         # TODO: output images to help debug problems
-        # TODO: output as HA description
+        ha = model_to_ha(trials, min_len, max_len, trace)
+        print "----------"
+        print "HA:"
+        print "----------"
+        print "startha"
+        for pk, pv in ha.params.items():
+            print "param:", pk, ":", pv.val() if isinstance(pv, jumpfinder.Stat) else pv
+        for vk, vv in ha.variables.items():
+            print "vbl:", vk, ":", vv
+        for ck, cv in ha.constraints.items():
+            print "constraint:", ck, ":", cv.val() if isinstance(cv, jumpfinder.Stat) else cv
+        print "initial:", ha.initial
+        for sn, s in ha.states.items():
+            print "startstate:", sn
+            for fk, fv in s.flows.items():
+                print "flow:", fk, fv
+            for t in s.transitions:
+                print "t:", t.guard, ":", t.update, ":", t.target
+            print "endstate:", sn
+        print "endha"
         pickle.dump((rom, start_movie,
                      jumpButton,
                      trackID, trials,
