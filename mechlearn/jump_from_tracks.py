@@ -9,27 +9,30 @@ from os.path import basename
 
 import numpy as np
 import pandas as pd
-
-# TODO os.environ["THEANO_FLAGS"] = "mode=FAST_RUN,device=cpu,floatX=float32"
+import os
+# TODO
+os.environ["THEANO_FLAGS"] = "mode=FAST_RUN,device=cpu,floatX=float32"
 # but also compilation directory = something involving game?
 import theano
 import theano.tensor as T
 
+from fceulib import VectorBytes
 import sys
 import jumpfinder
 import fceulib
 from jumpfinder import marioModel, DT
 import copy
 
+from fceu_help import *
 
 def hold(mask, duration):
     return [mask for i in range(duration)]
 
 
-def jump_seqs(minHeldFrames=1, maxHeldFrames=120, button=0x01):
+def jump_seqs(minHeldFrames=1, maxHeldFrames=120, step=10,button=0x01):
     # TODO: Could get away with a shorter end hold?
     return [(t, hold(jumpButton, t) + hold(0x0, 480))
-            for t in range(minHeldFrames, maxHeldFrames + 1)]
+            for t in [minHeldFrames] + list(range(minHeldFrames-1+step, maxHeldFrames + 1,step))]
 
 
 mode_names = ["ground", "up-control", "up-fixed", "down"]
@@ -397,6 +400,7 @@ if __name__ == "__main__":
     jumpButton = int(sys.argv[3])
     min_len = int(sys.argv[4])
     max_len = int(sys.argv[5])
+    step_len = int(sys.argv[6])
 
     emu = fceulib.runGame(rom)
     startInputs = fceulib.readInputs(start_movie)
@@ -405,11 +409,13 @@ if __name__ == "__main__":
         emu.step(m, 0x0)
     start_state = fceulib.VectorBytes()
     emu.save(start_state)
-
-    episodes = jump_seqs(min_len, max_len, jumpButton)
+    img_buffer = VectorBytes()
+    outputImage(emu, 'start',img_buffer)
+    episodes = jump_seqs(min_len, max_len,step_len, jumpButton)
 
     episode_outputs = []
     for jump_len, inputs in episodes:
+        emu.load(start_state)
         print "Run trial", jump_len
         ep_data = ppu_dump.ppu_output(emu,
                                       inputs,
@@ -438,8 +444,12 @@ if __name__ == "__main__":
         then_went_down = False
         finally_ended_on_ground = False
         # See if this sprite moved up and later moved down
+        
+        track_data = []
         for t in sorted(track_dict):
             ty = track_dict[t][1][1]
+            
+            track_data.append(track_dict[t][1][0:2])
             if not went_up and (ty < start_y):
                 went_up = True
             elif went_up and not then_went_down and (ty > min_y):
@@ -454,6 +464,9 @@ if __name__ == "__main__":
             min_y = min(min_y, ty)
         if went_up and then_went_down and finally_ended_on_ground:
             player_controlled.add(trackID)
+        print trackID
+        track_data = np.array(track_data)
+        
 
     assert len(player_controlled) > 0
     if len(player_controlled) > 1:
@@ -475,8 +488,12 @@ if __name__ == "__main__":
             sy = track[0][1][1]
             track = ep_tracks[trackID]
             stats = jumpfinder.Stats(sx, sy, 5)
+            track_data = []
             for t, dat in sorted(track.items()):
                 stats.update(dat[1][0], dat[1][1])
+                track_data.append((t, dat[1][1]))
+            track_data = np.array(track_data)
+            
             trials.append((inputs, stats))
         if actually_boring:
             print ("Sprite",

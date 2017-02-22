@@ -4,7 +4,7 @@ from unionfind import UnionFind
 import networkx as nx
 from networkx.algorithms import matching
 import scipy.stats
-
+import matplotlib.pyplot as plt
 
 def weight(data, track, R):
     distance = np.linalg.norm(data - track)
@@ -58,26 +58,34 @@ def tracks_from_sprite_data(sprite_data):
                     if id2 not in all_sprites[id1]:
                         all_sprites[id1][id2] = 0
                     all_sprites[id1][id2] += 1
-
+                    
     # now we have all of the pieces and can calculate the pmi for each pair of
     # sprites
     accepted = set()
     for sprite in all_sprites:
         dat = []
         px = float(pSprite[sprite]) / float(len(timesteps))
-
+        
         for other in all_sprites[sprite]:
             py = float(pSprite[other[0]]) / float(len(timesteps))
             pxy = float(all_sprites[sprite][other]) / float(len(timesteps))
-            d = log(px * py) / log(pxy) - 1
-            if d > threshold:
+            if pxy == 1:
                 s = sprite
                 o = other
                 if sprite > other:
                     o = sprite
                     s = other
                 accepted.add((s, o))
-
+            else:
+                
+                d = log( pxy/(px*py))/-log(pxy)# log(px * py) / log(pxy) - 1
+                if d > threshold:
+                    s = sprite
+                    o = other
+                    if sprite > other:
+                        o = sprite
+                        s = other
+                    accepted.add((s, o))
     timesteps_bb = {}
     for timestep in sorted_timesteps:
         dat = timesteps[timestep]
@@ -123,7 +131,7 @@ def tracks_from_sprite_data(sprite_data):
                                             for ii in sorted(merged[set_id])])
 
     sigma = 8.0
-    min_gate = 3.0
+    min_gate = 5.0
 
     tracks = {}
     old_tracks = []
@@ -152,6 +160,7 @@ def tracks_from_sprite_data(sprite_data):
         for track in tracks:
             B.add_node(track)
         for sprite_id, sprite in enumerate(bounding_boxes):
+            
             B.add_node('sprite{}'.format(sprite_id))
             B.add_node('track_start{}'.format(sprite_id))
             B.add_edge('sprite{}'.format(sprite_id),
@@ -159,7 +168,7 @@ def tracks_from_sprite_data(sprite_data):
                        weight=scipy.stats.norm(0, sigma).pdf(min_gate * sigma))
 
             obs = np.array([sprite[0], 240 - sprite[1]])
-
+            
             for track in tracks:
                 pt = tracks[track][timestep - 1][0]
 
