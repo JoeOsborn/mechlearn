@@ -33,12 +33,14 @@ def tracks_from_sprite_data(sprite_data):
     # get the per timestep data, as well as total counts for each sprite are,
     # if they are within width and height of each other,
     # add that as a co-occurrence
-
+    colors = ['rx','gx','bx','kx','cx','mx','yx','r+','g+','b+','k+','c+','m+','y+','rv','gv','bv','kv','cv','mv','yv']
+    #print '\n'.join(['{}: {}'.format(ii,c) for ii,c in enumerate(colors)])
     all_sprites = {}
     sorted_timesteps = sorted(timesteps)
     for timestep in sorted_timesteps:
         dat = timesteps[timestep]
         for ii in range(len(dat)):
+            #plt.plot(timestep,dat[ii][1][1],colors[dat[ii][0]])
             for jj in range(len(dat)):
                 if ii != jj:
                     id1 = dat[ii][0]
@@ -49,16 +51,19 @@ def tracks_from_sprite_data(sprite_data):
                     height1 = 16 if (sprite1[-1][0] & (1 << 5)) else 8
                     height2 = 16 if (sprite2[-1][0] & (1 << 5)) else 8
                     id2 = (dat[jj][0], dx, dy)
+
+                    #print id1, dat[jj][0], height1, height2, dx, dy
                     if (((height1 != height2) or
-                         (abs(dx) != 8 and abs(dx) != 0) or
-                         (abs(dy) != height1 and abs(dy) != 0))):
+                         (abs(dx) > 8 ) or
+                         (abs(dy) > height1))):
                         continue
                     if id1 not in all_sprites:
                         all_sprites[id1] = {}
                     if id2 not in all_sprites[id1]:
                         all_sprites[id1][id2] = 0
                     all_sprites[id1][id2] += 1
-                    
+    #plt.show()
+    #plt.clf()
     # now we have all of the pieces and can calculate the pmi for each pair of
     # sprites
     accepted = set()
@@ -79,6 +84,7 @@ def tracks_from_sprite_data(sprite_data):
             else:
                 
                 d = log( pxy/(px*py))/-log(pxy)# log(px * py) / log(pxy) - 1
+                print sprite, other, px, py, pxy, d
                 if d > threshold:
                     s = sprite
                     o = other
@@ -115,13 +121,14 @@ def tracks_from_sprite_data(sprite_data):
             right = float('-inf')
             top = float('inf')
             bottom = float('-inf')
+            print timestep, set_id
             for sprite in sprites:
                 height = 16 if (dat[sprite][1][-1][0] & (1 << 5)) else 8
                 left = min(dat[sprite][1][0], left)
                 right = max(dat[sprite][1][0] + height, right)
                 top = min(dat[sprite][1][1], top)
                 bottom = max(dat[sprite][1][1] + height, bottom)
-
+                print '\t', top, bottom
             bounding_boxes[((left + right) / 2,
                             (top + bottom) / 2,
                             left,
@@ -168,6 +175,7 @@ def tracks_from_sprite_data(sprite_data):
                        weight=scipy.stats.norm(0, sigma).pdf(min_gate * sigma))
 
             obs = np.array([sprite[0], 240 - sprite[1]])
+            #plt.plot(timestep,obs[1],'.')
             
             for track in tracks:
                 pt = tracks[track][timestep - 1][0]
@@ -202,4 +210,5 @@ def tracks_from_sprite_data(sprite_data):
                         tracks[track][timestep] = tracks[track][timestep - 1]
         for track in to_delete:
             del tracks[track]
+    #plt.show()   
     return (tracks, old_tracks)

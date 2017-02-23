@@ -32,7 +32,7 @@ def hold(mask, duration):
 def jump_seqs(minHeldFrames=1, maxHeldFrames=120, step=10,button=0x01):
     # TODO: Could get away with a shorter end hold?
     return [(t, hold(jumpButton, t) + hold(0x0, 480))
-            for t in [minHeldFrames] + list(range(minHeldFrames-1+step, maxHeldFrames + 1,step))]
+            for t in   ([minHeldFrames] + list(range(minHeldFrames-1+step, maxHeldFrames + 1,step)))]
 
 
 mode_names = ["ground", "up-control", "up-fixed", "down"]
@@ -216,7 +216,7 @@ def fit_model(modes):
     return (modelLinearAndClip, traceLinearAndClip)
 
 
-def test_model(trials, minHold, maxHold, traceLinearAndClip):
+def test_model(trials, minHold, maxHold, traceLinearAndClip,outputname):
     # Visualize the new approach with a weight vector and clipping.
     # EXECUTE ME after setting up the third model (no resets, no
     # matrix-ization)
@@ -281,8 +281,7 @@ def test_model(trials, minHold, maxHold, traceLinearAndClip):
         # velocity updates
         modelYs = []
         modelModes = []
-        mode_nums = {"ground": -200, "up-control": -
-                     190, "up-fixed": -180, "down": -170}
+        mode_nums = {"ground": -200, "up-control": -190, "up-fixed": -180, "down": -170}
         for trial, (moves, stats) in enumerate(trials):
             val = m.makeValuation({("x", 0): stats.x.allVals[0],
                                    ("y", 0): stats.y.allVals[0]})
@@ -301,10 +300,12 @@ def test_model(trials, minHold, maxHold, traceLinearAndClip):
                 # mi,val.state,val.variables[("y",0)],val.variables[("y",1)],stats.y.allVals[mi+1]
             modelYs.append(modelYs[-1])
             modelModes.append(mode_nums[val.state])
-        plt.plot(modelYs, "x-", lw=0.6)
-        plt.plot(modelModes, "+-", lw=0.6)
-    plt.plot(realYs, "o")
+        plt.plot(modelYs, "-")
+        plt.plot(modelModes, "-")
+    plt.plot(realYs, "+")
     plt.gca().invert_yaxis()
+    plt.savefig(outputname + '.png')
+    plt.clf()
     # plt.show()
 
 
@@ -315,6 +316,7 @@ def hold_durations(trackID, episode_outputs):
     min_len_duration = np.infty
     max_interesting_len = 0
     max_len_duration = 0
+    print 'EPISODES:', len(episode_outputs)
     for jump_len, inputs, ep_data, ep_tracks in episode_outputs:
         found_track = ep_tracks[trackID]
         sy = found_track[0][1][1]
@@ -333,13 +335,14 @@ def hold_durations(trackID, episode_outputs):
             if sy_dur >= sy_limit:
                 duration = duration
                 break
-        print duration, min_len_duration, max_len_duration 
         if duration > max_len_duration:
             max_len_duration = duration
             max_interesting_len = jump_len
-        if duration < min_len_duration:
+        if duration <= min_len_duration:
             min_len_duration = duration
             min_interesting_len = jump_len
+        print duration, jump_len,min_len_duration, max_len_duration,min_interesting_len,max_interesting_len
+    min_interesting_len = min(min_interesting_len,max_interesting_len)
     return  min_interesting_len, max_interesting_len
 
 
@@ -403,7 +406,7 @@ if __name__ == "__main__":
     max_len = int(sys.argv[5])
 
     step_len = int(sys.argv[6])
-
+    outputname = sys.argv[7]
     emu = fceulib.runGame(rom)
     startInputs = fceulib.readInputs(start_movie)
     print "Set up initial state"
@@ -414,7 +417,6 @@ if __name__ == "__main__":
     img_buffer = VectorBytes()
     outputImage(emu, 'start',img_buffer)
     episodes = jump_seqs(min_len, max_len,step_len, jumpButton)
-
     episode_outputs = []
     for jump_len, inputs in episodes:
         emu.load(start_state)
@@ -423,6 +425,7 @@ if __name__ == "__main__":
                                       inputs,
                                       bg_data=False,
                                       sprite_data=True)
+        outputImage(emu, 'end',img_buffer)
         (ep_tracks, old_ep_tracks) = tracking.tracks_from_sprite_data(
             ep_data["sprite_data"])
         episode_outputs.append((jump_len,
@@ -451,13 +454,16 @@ if __name__ == "__main__":
         for t in sorted(track_dict):
             ty = track_dict[t][1][1]
             
-            track_data.append(track_dict[t][1][0:2])
+            track_data.append((t,track_dict[t][1][1]))
             if not went_up and (ty < start_y):
+                print 'Went up'
                 went_up = True
             elif went_up and not then_went_down and (ty > min_y):
+                print 'Then went down'
                 then_went_down = True
             elif (went_up and then_went_down and
                   not finally_ended_on_ground and ty == start_y):
+                print 'finally ended on ground'
                 finally_ended_on_ground = True
             if finally_ended_on_ground and ty > start_y:
                 print "Warning, went down below start Y?", trackID
@@ -468,7 +474,8 @@ if __name__ == "__main__":
             player_controlled.add(trackID)
         print trackID
         track_data = np.array(track_data)
-        
+        #plt.plot(track_data[:,0],track_data[:,1])
+        #plt.show()
 
     assert len(player_controlled) > 0
     if len(player_controlled) > 1:
@@ -496,7 +503,9 @@ if __name__ == "__main__":
                 stats.update(dat[1][0], dat[1][1])
                 track_data.append((t, dat[1][1]))
             track_data = np.array(track_data)
-            
+            plt.plot(track_data[:,0],track_data[:,1])
+            plt.savefig('{}_track_{}.png'.format(outputname,trackID))
+            plt.clf()
             trials.append((inputs, stats))
         if actually_boring:
             print ("Sprite",
@@ -510,7 +519,7 @@ if __name__ == "__main__":
         model, trace = fit_model(by_mode)
         # test
         print "Test model"
-        test_model(trials, min_len, max_len, trace)
+        test_model(trials, min_len, max_len, trace,'{}_{}'.format(outputname,trackID))
         # TODO: output images to help debug problems
         ha = model_to_ha(trials, min_len, max_len, trace)
         print "----------"
