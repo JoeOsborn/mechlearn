@@ -121,14 +121,14 @@ def tracks_from_sprite_data(sprite_data):
             right = float('-inf')
             top = float('inf')
             bottom = float('-inf')
-            print timestep, set_id
+            #print timestep, set_id
             for sprite in sprites:
                 height = 16 if (dat[sprite][1][-1][0] & (1 << 5)) else 8
                 left = min(dat[sprite][1][0], left)
                 right = max(dat[sprite][1][0] + height, right)
                 top = min(dat[sprite][1][1], top)
                 bottom = max(dat[sprite][1][1] + height, bottom)
-                print '\t', top, bottom
+                #print '\t', top, bottom
             bounding_boxes[((left + right) / 2,
                             (top + bottom) / 2,
                             left,
