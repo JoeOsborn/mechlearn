@@ -333,13 +333,14 @@ def hold_durations(trackID, episode_outputs):
             if sy_dur >= sy_limit:
                 duration = duration
                 break
+        print duration, min_len_duration, max_len_duration 
         if duration > max_len_duration:
             max_len_duration = duration
             max_interesting_len = jump_len
-        if duration <= min_len_duration:
+        if duration < min_len_duration:
             min_len_duration = duration
             min_interesting_len = jump_len
-    return min_interesting_len, max_interesting_len
+    return  min_interesting_len, max_interesting_len
 
 
 def model_to_ha(trials, minHold, maxHold, traceLinearAndClip):
@@ -400,6 +401,7 @@ if __name__ == "__main__":
     jumpButton = int(sys.argv[3])
     min_len = int(sys.argv[4])
     max_len = int(sys.argv[5])
+
     step_len = int(sys.argv[6])
 
     emu = fceulib.runGame(rom)
@@ -475,6 +477,7 @@ if __name__ == "__main__":
     # Now fit an automaton for each interesting sprite
     for trackID in player_controlled:
         min_len, max_len = hold_durations(trackID, episode_outputs)
+        
         print "Sprite", trackID, "control interval", min_len, max_len
         # Convert tracking data into jumpfinder's usual format
         trials = []
