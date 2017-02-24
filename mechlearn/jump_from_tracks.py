@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import os
 # TODO
-os.environ["THEANO_FLAGS"] = "mode=FAST_RUN,device=cpu,floatX=float32"
+#os.environ["THEANO_FLAGS"] = "mode=FAST_RUN,device=cpu,floatX=float32"
 # but also compilation directory = something involving game?
 import theano
 import theano.tensor as T
