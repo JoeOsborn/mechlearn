@@ -42,30 +42,30 @@ roms = ['movies/Aladdin (Europe).nes',
 'movies/Teenage Mutant Ninja Turtles (USA).nes',]
 
 
-outputs = ['Aladdin(Europe)-1.HA',
-'BeautyandtheBeast(Europe)-0.HA',
-'CastlevaniaIII-Dracula\'sCurse(USA)-Jump.HA',
-'CastlevaniaII-Simon\'sQuest(USA)-Jump.HA',
-'Castlevania(USA)-0-Jump.HA',
-'Chip\'nDaleRescueRangers(USA)-Jump.HA',
-'Contra(USA)-0.HA',
-'DarkwingDuck(USA)-2.HA',
-'DuckTales(USA)-0.HA',
-'Hudson\'sAdventureIslandIII(USA)-0.HA',
-'Hudson\'sAdventureIslandII(USA)-0.HA',
-'Hudson\'sAdventureIsland(USA)-0.HA',
-'LionKing,The(Europe)-0.HA',
-'NinjaGaidenEpisodeIII-TheAncientShipofDoom(USA)-0.HA',
-'NinjaGaidenEpisodeII-TheDarkSwordofChaos(USA)-0.HA',
-'NinjaGaiden(USA)-0.HA',
-'SuperC(USA)-0.HA',
-'TakahashiMeijinnoBoukenJimaIV(Japan)[EnbyDemiforcev1.0](AdventureIslandIV)-0.HA',
-'TeenageMutantNinjaTurtlesII-TheArcadeGame(USA)-0.HA',
-'TeenageMutantNinjaTurtles(USA)-0.HA',]
+outputs = ['Aladdin_Europe_-1.HA',
+'BeautyandtheBeast_Europe_-0.HA',
+'CastlevaniaIII-Dracula\'sCurse_USA_-Jump.HA',
+'CastlevaniaII-Simon\'sQuest_USA_-Jump.HA',
+'Castlevania_USA_-0-Jump.HA',
+'Chip\'nDaleRescueRangers_USA_-Jump.HA',
+'Contra_USA_-0.HA',
+'DarkwingDuck_USA_-2.HA',
+'DuckTales_USA_-0.HA',
+'Hudson\'sAdventureIslandIII_USA_-0.HA',
+'Hudson\'sAdventureIslandII_USA_-0.HA',
+'Hudson\'sAdventureIsland_USA_-0.HA',
+'LionKing,The_Europe_-0.HA',
+'NinjaGaidenEpisodeIII-TheAncientShipofDoom_USA_-0.HA',
+'NinjaGaidenEpisodeII-TheDarkSwordofChaos_USA_-0.HA',
+'NinjaGaiden_USA_-0.HA',
+'SuperC_USA_-0.HA',
+'TakahashiMeijinnoBoukenJimaIV_Japan_[EnbyDemiforcev1.0]_AdventureIslandIV_-0.HA',
+'TeenageMutantNinjaTurtlesII-TheArcadeGame_USA_-0.HA',
+'TeenageMutantNinjaTurtles_USA_-0.HA',]
 
 import os
 
 for movie,rom, output in zip(inputs,roms,outputs):
-    command='time python jump_from_tracks.py "{}" "{}" 1 1 120 1 {} > "{}"'.format(rom,movie,output)
+    command='time python jump_from_tracks.py "{}" "{}" 1 2 120 2 {} > "{}"'.format(rom,movie,output,output)
     print'RUNNING',command
     os.system(command)
