@@ -1,0 +1,71 @@
+inputs = ['movies/Aladdin (Europe)-1.fm2',
+'movies/Beauty and the Beast (Europe)-0.fm2',
+'movies/Castlevania III - Dracula\'s Curse (USA)-Jump.fm2',
+'movies/Castlevania II - Simon\'s Quest (USA)-Jump.fm2',
+'movies/Castlevania (USA)-0-Jump.fm2',
+'movies/Chip \'n Dale Rescue Rangers (USA)-Jump.fm2',
+'movies/Contra (USA)-0.fm2',
+'movies/Darkwing Duck (USA)-2.fm2',
+'movies/Duck Tales (USA)-0.fm2',
+'movies/Hudson\'s Adventure Island III (USA)-0.fm2',
+'movies/Hudson\'s Adventure Island II (USA)-0.fm2',
+'movies/Hudson\'s Adventure Island (USA)-0.fm2',
+'movies/Lion King, The (Europe)-0.fm2',
+'movies/Ninja Gaiden Episode III - The Ancient Ship of Doom (USA)-0.fm2',
+'movies/Ninja Gaiden Episode II - The Dark Sword of Chaos (USA)-0.fm2',
+'movies/Ninja Gaiden (USA)-0.fm2',
+'movies/Super C (USA)-0.fm2',
+'movies/Takahashi Meijin no Bouken Jima IV (Japan) [En by Demiforce v1.0] (~Adventure Island IV)-0.fm2',
+'movies/Teenage Mutant Ninja Turtles II - The Arcade Game (USA)-0.fm2',
+'movies/Teenage Mutant Ninja Turtles (USA)-0.fm2',]
+
+roms = ['movies/Aladdin (Europe).nes',
+'movies/Beauty and the Beast (Europe).nes',
+'movies/Castlevania III - Dracula\'s Curse (USA).nes',
+'movies/Castlevania II - Simon\'s Quest (USA).nes',
+'movies/Castlevania (USA).nes',
+'movies/Chip \'n Dale Rescue Rangers (USA).nes',
+'movies/Contra (USA).nes',
+'movies/Darkwing Duck (USA).nes',
+'movies/Duck Tales (USA).nes',
+'movies/Hudson\'s Adventure Island III (USA).nes',
+'movies/Hudson\'s Adventure Island II (USA).nes',
+'movies/Hudson\'s Adventure Island (USA).nes',
+'movies/Lion King, The (Europe).nes',
+'movies/Ninja Gaiden Episode III - The Ancient Ship of Doom (USA).nes',
+'movies/Ninja Gaiden Episode II - The Dark Sword of Chaos (USA).nes',
+'movies/Ninja Gaiden (USA).nes',
+'movies/Super C (USA).nes',
+'movies/Super Mario Bros. (Japan, USA).nes',
+'movies/Takahashi Meijin no Bouken Jima IV (Japan) [En by Demiforce v1.0] (~Adventure Island IV).nes',
+'movies/Teenage Mutant Ninja Turtles II - The Arcade Game (USA).nes',
+'movies/Teenage Mutant Ninja Turtles (USA).nes',]
+
+
+outputs = ['Aladdin(Europe)-1.HA',
+'BeautyandtheBeast(Europe)-0.HA',
+'CastlevaniaIII-Dracula\'sCurse(USA)-Jump.HA',
+'CastlevaniaII-Simon\'sQuest(USA)-Jump.HA',
+'Castlevania(USA)-0-Jump.HA',
+'Chip\'nDaleRescueRangers(USA)-Jump.HA',
+'Contra(USA)-0.HA',
+'DarkwingDuck(USA)-2.HA',
+'DuckTales(USA)-0.HA',
+'Hudson\'sAdventureIslandIII(USA)-0.HA',
+'Hudson\'sAdventureIslandII(USA)-0.HA',
+'Hudson\'sAdventureIsland(USA)-0.HA',
+'LionKing,The(Europe)-0.HA',
+'NinjaGaidenEpisodeIII-TheAncientShipofDoom(USA)-0.HA',
+'NinjaGaidenEpisodeII-TheDarkSwordofChaos(USA)-0.HA',
+'NinjaGaiden(USA)-0.HA',
+'SuperC(USA)-0.HA',
+'TakahashiMeijinnoBoukenJimaIV(Japan)[EnbyDemiforcev1.0](AdventureIslandIV)-0.HA',
+'TeenageMutantNinjaTurtlesII-TheArcadeGame(USA)-0.HA',
+'TeenageMutantNinjaTurtles(USA)-0.HA',]
+
+import os
+
+for movie,rom, output in zip(inputs,roms,outputs):
+    command='time python jump_from_tracks.py "{}" "{}" 1 1 120 1 {} > "{}"'.format(rom,movie,output)
+    print'RUNNING',command
+    os.system(command)
