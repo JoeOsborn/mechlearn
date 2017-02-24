@@ -2,9 +2,9 @@ import fceulib
 from fceulib import VectorBytes
 import numpy as np
 from fceu_help import pointer_to_numpy, colorize_tile
-from fceu_help import get_all_sprites, get_tile, get_sprite
+from fceu_help import get_all_sprites, get_tile, get_sprite,outputImage
 from math import log
-
+import matplotlib.pyplot as plt
 # Needed for Joe's pyenv to find CV2
 import site
 site.addsitedir("/usr/local/lib/python2.7/site-packages")
@@ -27,15 +27,16 @@ def ppu_output(emu, inputVec, **kwargs):
     xScrolls = None
     motion = {}
 
+    img_buffer = VectorBytes()
     get_bg_data = kwargs.get("bg_data", True)
     get_colorized_tiles = kwargs.get("colorized_tiles", True)
     get_sprite_data = kwargs.get("sprite_data", True)
 
+    display =  kwargs.get("display", True)
     for timestep, inp in enumerate(inputVec):
         emu.stepFull(inp, 0x0)
         if not (timestep % peekevery == 0):
             continue
-
         if xScrolls is not None:
             xScrolls[timestep] = emu.xScroll
 
@@ -43,6 +44,10 @@ def ppu_output(emu, inputVec, **kwargs):
         yScroll = emu.fc.ppu.yScroll
         fineXScroll = xScroll & 0x7
         coarseXScroll = xScroll >> 3
+
+        if display:
+            outputImage(emu, 'images/{}'.format(timestep),img_buffer)
+            
 
         nt_index = pointer_to_numpy(emu.fc.ppu.values)[0] & 0x3
         if get_bg_data:
@@ -123,14 +128,17 @@ def ppu_output(emu, inputVec, **kwargs):
 
         if get_sprite_data:
             sprite_list, colorized_sprites = get_all_sprites(emu.fc)
-
             for sprite_id, sprite in enumerate(sprite_list):
+                
                 if np.sum(colorized_sprites[sprite_id].ravel()) == 0:
                     continue
                 uniq = tuple(colorized_sprites[sprite_id].ravel())
                 if uniq not in colorized2id:
                     colorized2id[uniq] = len(colorized2id)
+                    #plt.imshow(colorized_sprites[sprite_id][:,:,:3]/255.)
+                    #plt.show()
                     id2colorized[colorized2id[uniq]] = colorized_sprites[sprite_id]
+                #print timestep,  colorized2id[uniq], sprite[:2]
                 data.append((timestep, colorized2id[uniq], sprite))
 
     emu.load(start)

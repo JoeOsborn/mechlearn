@@ -303,6 +303,7 @@ def test_model(trials, minHold, maxHold, traceLinearAndClip,outputname):
         plt.plot(modelYs, "-")
         plt.plot(modelModes, "-")
     plt.plot(realYs, "+")
+    plt.ylim([-210,256])
     plt.gca().invert_yaxis()
     plt.savefig(outputname + '.png')
     plt.clf()
@@ -423,11 +424,26 @@ if __name__ == "__main__":
         print "Run trial", jump_len
         ep_data = ppu_dump.ppu_output(emu,
                                       inputs,
-                                      bg_data=False,
-                                      sprite_data=True)
+                                      bg_data=True,
+                                      sprite_data=True,
+                                      display=False)
         outputImage(emu, 'end',img_buffer)
+        #for nt in ep_data['nametables']:
+        #    plt.imshow(nt/255.)
+        #    plt.show()
         (ep_tracks, old_ep_tracks) = tracking.tracks_from_sprite_data(
             ep_data["sprite_data"])
+        for track in ep_tracks:
+            first = float('nan')
+            for ts in sorted(ep_tracks[track]):
+                if  first != first:
+                    first = ep_tracks[track][ts][1][1]
+                if ep_tracks[track][ts][1][1] > first:
+                    ep_tracks[track][ts] = list(ep_tracks[track][ts])
+                    ep_tracks[track][ts][1] = list(ep_tracks[track][ts][1])
+                    ep_tracks[track][ts][1][1] = first
+                    ep_tracks[track][ts][1] = tuple(ep_tracks[track][ts][1])
+                    ep_tracks[track][ts] = tuple(ep_tracks[track][ts])
         episode_outputs.append((jump_len,
                                 inputs,
                                 ep_data,
@@ -453,7 +469,7 @@ if __name__ == "__main__":
         track_data = []
         for t in sorted(track_dict):
             ty = track_dict[t][1][1]
-            
+            #print t, ty
             track_data.append((t,track_dict[t][1][1]))
             if not went_up and (ty < start_y):
                 print 'Went up'
@@ -472,7 +488,7 @@ if __name__ == "__main__":
             min_y = min(min_y, ty)
         if went_up and then_went_down and finally_ended_on_ground:
             player_controlled.add(trackID)
-        print trackID
+        # print trackID
         track_data = np.array(track_data)
         #plt.plot(track_data[:,0],track_data[:,1])
         #plt.show()

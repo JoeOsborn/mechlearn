@@ -17,7 +17,7 @@ def tracks_from_sprite_data(sprite_data):
     # 0 = independent
     # 1 = only co-occur
 
-    threshold = 0.1
+    threshold = 0.01
     # Read in data
     timesteps = {}
     pSprite = {}
@@ -33,7 +33,8 @@ def tracks_from_sprite_data(sprite_data):
     # get the per timestep data, as well as total counts for each sprite are,
     # if they are within width and height of each other,
     # add that as a co-occurrence
-    colors = ['rx','gx','bx','kx','cx','mx','yx','r+','g+','b+','k+','c+','m+','y+','rv','gv','bv','kv','cv','mv','yv']
+    #          0     1   2    3    4    5    6    7    8    9    10   11   12   13   14   15   16
+    colors = ['rx','gx','bx','kx','cx','mx','yx','r+','g+','b+','k+','c+','m+','y+','rv','gv','bv','kv','cv','mv','yv','r^','g^','b^','k^','c^','m^','y^','r.','g.','b.','k.','c.','m.','y.']
     #print '\n'.join(['{}: {}'.format(ii,c) for ii,c in enumerate(colors)])
     all_sprites = {}
     sorted_timesteps = sorted(timesteps)
@@ -84,7 +85,7 @@ def tracks_from_sprite_data(sprite_data):
             else:
                 
                 d = log( pxy/(px*py))/-log(pxy)# log(px * py) / log(pxy) - 1
-                print sprite, other, px, py, pxy, d
+                #print sprite, other, px, py, pxy, d
                 if d > threshold:
                     s = sprite
                     o = other
