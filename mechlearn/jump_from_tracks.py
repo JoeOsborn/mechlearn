@@ -424,7 +424,7 @@ if __name__ == "__main__":
         print "Run trial", jump_len
         ep_data = ppu_dump.ppu_output(emu,
                                       inputs,
-                                      bg_data=True,
+                                      bg_data=False,
                                       sprite_data=True,
                                       display=False)
         outputImage(emu, 'end',img_buffer)
