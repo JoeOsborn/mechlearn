@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 
-import pymc3 as pm
+
 import ppu_dump
 import tracking
 import pickle
@@ -13,8 +13,6 @@ import os
 # TODO
 #os.environ["THEANO_FLAGS"] = "mode=FAST_RUN,device=cpu,floatX=float32"
 # but also compilation directory = something involving game?
-#import theano
-#import theano.tensor as T
 
 from fceulib import VectorBytes
 import sys
@@ -150,165 +148,6 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
     return modes
 
 
-def fit_model(modes):
-    # This is the version without matrix-ization, it takes about as long to compile (unmeasured) and samples over 10x faster even single-threaded
-    # MAYBE EXECUTE ME! Then the last cell.
-    with pm.Model() as modelLinearAndClip:
-        accs = dict()
-        sigs = dict()
-        prev_weights = dict()
-        initcliplo = dict()
-        initcliphi = dict()
-        for m in modes:
-            if len(modes[m]) == 0:
-                print "Warning, no witness states for mode " + m
-                continue
-            sigs[m] = dict()
-            accs[m] = dict()
-            prev_weights[m] = dict()
-            initcliplo[m] = dict()
-            initcliphi[m] = dict()
-            for v in ["dx", "dy"]:
-                sigs[m][v] = pm.HalfCauchy(
-                    m + "_" + v + "_sigma", beta=10., testval=1.)
-                accs[m][v] = pm.Normal(
-                    m + "_" + v + "_acc", mu=0, sd=10., testval=0.)
-                allVals = []
-                allTs = []
-                allPrevs = []
-                for _s, prevs, vbls in modes[m]:
-                    allVals = allVals + list(vbls[v])
-                    allTs = allTs + list(vbls["t"])
-                    # TODO: use vars uniformly distributed between prevs[v] and prevs[v]+1 to account for uncertainty?
-                    # Not sure how to get a nice Theano-friendly setup for that
-                    # though
-                    allPrevs = allPrevs + [[prevs["dx"],
-                                            prevs["dy"],
-                                            1.0] for i in range(len(vbls[v]))]
-                init_weights = [1.0 if vi ==
-                                v else 0.0 for vi in ["dx", "dy", "$const"]]
-                prev_weights[m][v] = pm.Normal(m + "_" + v + "_weights",
-                                               mu=init_weights,
-                                               testval=init_weights,
-                                               sd=10.,
-                                               shape=3)
-                vals = np.array(allVals)
-                # gotta add 1 to every t since by the time we read the values
-                # it's been in the state for one timestep already.
-                ts = np.array(allTs) + 1
-                prevs = np.array(allPrevs)
-                muInit = prev_weights[m][v].dot(prevs.T)
-                mu = muInit + accs[m][v] * ts
-                lik = pm.Normal(m + "_" + v,
-                                mu=mu,
-                                sd=sigs[m][v],
-                                observed=vals)
-        print "Find start"
-        start = dict()
-        # start = pm.approx_hessian(model.test_point)
-        print str(start)
-        print "Set up step method"
-        step = pm.Metropolis()
-        # step = pm.NUTS(scaling=start)
-        print "Start sampling"
-        traceLinearAndClip = pm.sample(10000, step, progressbar=True)
-        print "Done!"
-    return (modelLinearAndClip, traceLinearAndClip)
-
-
-def test_model(trials, minHold, maxHold, traceLinearAndClip,outputname):
-    # Visualize the new approach with a weight vector and clipping.
-    # EXECUTE ME after setting up the third model (no resets, no
-    # matrix-ization)
-    samples = 200
-    m = copy.deepcopy(marioModel)
-
-    realYs = []
-    for (_moves, stats) in trials:
-        realYs = realYs + stats.y.allVals
-    plt.figure(figsize=(20, 10))
-    sample = 0
-    for rand_trace in np.random.randint(len(traceLinearAndClip) * 0.75, len(traceLinearAndClip), samples):
-        sample += 1
-        t = traceLinearAndClip[rand_trace]
-        m.params["gravity"].update(t["down_dy_acc"] / (DT * DT), True)
-        if minHold != maxHold:
-            m.params[
-                "up-control-gravity"].update(t["up-control_dy_acc"] / (DT * DT), True)
-        else:
-            # We didn't learn anything for up-control, so use up-fixed instead.
-            m.params[
-                "up-control-gravity"].update(t["up-fixed_dy_acc"] / (DT * DT), True)
-        m.params[
-            "up-fixed-gravity"].update(t["up-fixed_dy_acc"] / (DT * DT), True)
-    #     if t["up-fixed_dy_acc"] < 0 or t["up-control_dy_acc"] < 0 or t["down_dy_acc"] > 0:
-    #         # Outlier, ignore
-    #         continue
-        m.params["minButtonDuration"].update(minHold * DT, True)
-        m.params["maxButtonDuration"].update(maxHold * DT, True)
-
-        if minHold != maxHold:
-            m.params["groundToUpControlDYReset"] = (
-                "+",
-                t["up-control_dy_weights"][2] / DT,
-                ("+",
-                 ("*", t["up-control_dy_weights"][0], ("x", 1)),
-                 ("*", t["up-control_dy_weights"][1], ("y", 1)))
-            )
-            m.params["upControlToUpFixedDYReset"] = (
-                "+",
-                t["up-fixed_dy_weights"][2] / DT,
-                ("+",
-                 ("*", t["up-fixed_dy_weights"][0], ("x", 1)),
-                 ("*", t["up-fixed_dy_weights"][1], ("y", 1)))
-            )
-        else:
-            # Some hacking around the HA structure
-            m.params["groundToUpControlDYReset"] = (
-                "+",
-                t["up-fixed_dy_weights"][2] / DT,
-                ("+",
-                 ("*", t["up-fixed_dy_weights"][0], ("x", 1)),
-                 ("*", t["up-fixed_dy_weights"][1], ("y", 1)))
-            )
-            # Treat up-fixed as a continuation of up-control
-            m.params["upControlToUpFixedDYReset"] = ("y", 1)
-
-        # Unused learned weights: ground, down.
-
-        # then do jump trials with horizontal speed and make sure we learn the right weights.
-        # then try to learn the clipping for earlyOutClipVel and other discrete
-        # velocity updates
-        modelYs = []
-        modelModes = []
-        mode_nums = {"ground": -200, "up-control": -190, "up-fixed": -180, "down": -170}
-        for trial, (moves, stats) in enumerate(trials):
-            val = m.makeValuation({("x", 0): stats.x.allVals[0],
-                                   ("y", 0): stats.y.allVals[0]})
-            for mi, move in enumerate(moves):
-                m.step(
-                    val,
-                    DT,
-                    set(["jump"] if move & jumpButton else []),
-                    set([("bottom", "ground")]
-                        if (val.variables[("y", 0)] > stats.y.allVals[0] - 1 and
-                            mi >= 5)
-                        else []))
-                modelModes.append(mode_nums[val.state])
-                modelYs.append(val.variables[("y", 0)])
-                # print
-                # mi,val.state,val.variables[("y",0)],val.variables[("y",1)],stats.y.allVals[mi+1]
-            modelYs.append(modelYs[-1])
-            modelModes.append(mode_nums[val.state])
-        plt.plot(modelYs, "-")
-        plt.plot(modelModes, "-")
-    plt.plot(realYs, "+")
-    plt.ylim([-210,256])
-    plt.gca().invert_yaxis()
-    plt.savefig(outputname + '.png')
-    plt.clf()
-    # plt.show()
-
 
 def hold_durations(trackID, episode_outputs):
     # determine minHold, maxHold by looking at episodes and
@@ -346,59 +185,6 @@ def hold_durations(trackID, episode_outputs):
     min_interesting_len = min(min_interesting_len,max_interesting_len)
     return  min_interesting_len, max_interesting_len
 
-
-def model_to_ha(trials, minHold, maxHold, traceLinearAndClip):
-    m = copy.deepcopy(marioModel)
-    s = pm.df_summary(traceLinearAndClip[len(traceLinearAndClip) * 0.7:-1:10])
-    means = s["mean"]
-    print s
-    print "-------\nMeans:\n------"
-    print means
-    print "--------"
-    m.params["gravity"].update(
-        means["down_dy_acc"] / (DT * DT), True)
-    if minHold != maxHold:
-        m.params["up-control-gravity"].update(
-            means["up-control_dy_acc"] / (DT * DT), True)
-    else:
-        # We didn't learn anything for up-control, so use up-fixed instead.
-        m.params["up-control-gravity"].update(
-            means["up-fixed_dy_acc"] / (DT * DT), True)
-    m.params[
-        "up-fixed-gravity"].update(
-            means["up-fixed_dy_acc"] / (DT * DT), True)
-    m.params["minButtonDuration"].update(minHold * DT, True)
-    m.params["maxButtonDuration"].update(maxHold * DT, True)
-
-    if minHold != maxHold:
-        m.params["groundToUpControlDYReset"] = (
-            "+",
-            means["up-control_dy_weights__2"] / DT,
-            ("+",
-             ("*", means["up-control_dy_weights__0"], ("x", 1)),
-             ("*", means["up-control_dy_weights__1"], ("y", 1)))
-        )
-        m.params["upControlToUpFixedDYReset"] = (
-            "+",
-            means["up-fixed_dy_weights__2"] / DT,
-            ("+",
-             ("*", means["up-fixed_dy_weights__0"], ("x", 1)),
-             ("*", means["up-fixed_dy_weights__1"], ("y", 1)))
-        )
-    else:
-        # Some hacking around the HA structure
-        m.params["groundToUpControlDYReset"] = (
-            "+",
-            means["up-fixed_dy_weights__2"] / DT,
-            ("+",
-             ("*", means["up-fixed_dy_weights__0"], ("x", 1)),
-             ("*", means["up-fixed_dy_weights__1"], ("y", 1)))
-        )
-        # Treat up-fixed as a continuation of up-control
-        m.params["upControlToUpFixedDYReset"] = ("y", 1)
-    return m
-
-
 if __name__ == "__main__":
     rom = sys.argv[1]
     start_movie = sys.argv[2]
@@ -433,6 +219,7 @@ if __name__ == "__main__":
         #    plt.show()
         (ep_tracks, old_ep_tracks) = tracking.tracks_from_sprite_data(
             ep_data["sprite_data"])
+        
         for track in ep_tracks:
             first = float('nan')
             for ts in sorted(ep_tracks[track]):
@@ -443,7 +230,7 @@ if __name__ == "__main__":
                     ep_tracks[track][ts][1] = list(ep_tracks[track][ts][1])
                     ep_tracks[track][ts][1][1] = first
                     ep_tracks[track][ts][1] = tuple(ep_tracks[track][ts][1])
-                    ep_tracks[track][ts] = tuple(ep_tracks[track][ts])
+                    print 'after',ep_tracks[track][ts]
         episode_outputs.append((jump_len,
                                 inputs,
                                 ep_data,
@@ -454,6 +241,8 @@ if __name__ == "__main__":
     player_controlled = set()
     # Get sprite track IDs from the first episode outputs (for
     # sprites which still existed at the end)
+    #for trackID, track_dict in episode_outputs[0][-1].items():
+    
     for trackID, track_dict in episode_outputs[-1][-1].items():
         # Also skip anything which was not present at start
         if 0 not in track_dict:
@@ -488,16 +277,17 @@ if __name__ == "__main__":
             min_y = min(min_y, ty)
         if went_up and then_went_down and finally_ended_on_ground:
             player_controlled.add(trackID)
-        # print trackID
+        print trackID
         track_data = np.array(track_data)
         #plt.plot(track_data[:,0],track_data[:,1])
         #plt.show()
-
+        
     assert len(player_controlled) > 0
     if len(player_controlled) > 1:
         print ("Warning, multiple player-controlled sprites:",
                player_controlled)
     # Now fit an automaton for each interesting sprite
+    
     for trackID in player_controlled:
         min_len, max_len = hold_durations(trackID, episode_outputs)
         
@@ -523,47 +313,3 @@ if __name__ == "__main__":
             plt.savefig('{}_track_{}.png'.format(outputname,trackID))
             plt.clf()
             trials.append((inputs, stats))
-        if actually_boring:
-            print ("Sprite",
-                   trackID,
-                   "actually wasn't there for all experiments")
-            continue
-        print "Generate labeled data"
-        by_mode = generate_labeled_data(trials, min_len, max_len, jumpButton)
-        # fit
-        print "Fit model"
-        model, trace = fit_model(by_mode)
-        # test
-        print "Test model"
-        test_model(trials, min_len, max_len, trace,'{}_{}'.format(outputname,trackID))
-        # TODO: output images to help debug problems
-        ha = model_to_ha(trials, min_len, max_len, trace)
-        print "----------"
-        print "HA:"
-        print "----------"
-        print "startha"
-        for pk, pv in ha.params.items():
-            print "param:", pk, ":", pv.val() if isinstance(pv, jumpfinder.Stat) else pv
-        for vk, vv in ha.variables.items():
-            print "vbl:", vk, ":", vv
-        for ck, cv in ha.constraints.items():
-            print "constraint:", ck, ":", cv.val() if isinstance(cv, jumpfinder.Stat) else cv
-        print "initial:", ha.initial
-        for sn, s in ha.states.items():
-            print "startstate:", sn
-            for fk, fv in s.flows.items():
-                print "flow:", fk, fv
-            for t in s.transitions:
-                print "t:", t.guard, ":", t.update, ":", t.target
-            print "endstate:", sn
-        print "endha"
-        pickle.dump((rom, start_movie,
-                     jumpButton,
-                     trackID, trials,
-                     min_len, max_len,
-                     model, trace,
-                     ha),
-                    open("learned_{}_{}_{}.pkl".format(basename(rom),
-                                                       basename(start_movie),
-                                                       trackID),
-                         'wb'))
