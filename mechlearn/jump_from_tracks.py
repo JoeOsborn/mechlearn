@@ -349,7 +349,7 @@ def hold_durations(trackID, episode_outputs):
 
 def model_to_ha(trials, minHold, maxHold, traceLinearAndClip):
     m = copy.deepcopy(marioModel)
-    s = pm.df_summary(traceLinearAndClip[len(traceLinearAndClip) * 0.7:-1:10])
+    s = pm.df_summary(traceLinearAndClip[int(len(traceLinearAndClip) * 0.7):-1:10])
     means = s["mean"]
     print s
     print "-------\nMeans:\n------"
