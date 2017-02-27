@@ -21,15 +21,18 @@ def sprite_attributes_to_dict(attributes):
         'vflip'  : 0x80}
     sprite_attributes = {mask:attributes&masks[mask]>0 for mask in masks}
     sprite_attributes['palette'] = attributes & 0x03
+    sprite_attributes['table'] = attributes & 0x01
     return sprite_attributes
 
 
 
-def get_sprite(tile_id,fc):
+def get_sprite(tile_id,table,fc):
     repeat = 1
+    
     if (fc.ppu.values[0] & (1 << 5)):
         repeat = 2
-        fg_pat_addr = 0x1000 if (tile_id & 0x01) else 0x0000
+        fg_pat_addr = 0x1000 if table else 0x0000
+        #fg_pat_addr = 0x1000 if (tile_id & 0x01) else 0x0000
         
         fg_ram = pointer_to_numpy(fc.cart.getVPageChunk(fg_pat_addr),0x1000)
         tile_id = (tile_id >> 1) << 1
@@ -125,8 +128,8 @@ def get_all_sprites(fc):
                             ppu_values[1],
                             ppu_values[2],
                             ppu_values[3]]])
-            ids.add(sprite_ram[ii+1])
-    sprite_map = {id:get_sprite(id,fc) for id in ids}
+            ids.add((sprite_ram[ii+1],attr['table']))
+    sprite_map = {id[0]:get_sprite(id[0],id[1],fc) for id in ids}
     colorized_sprites = []
     for sprite,attr in zip(output,attributes):
         sprite_pixels = sprite_map[sprite[2]]
