@@ -217,20 +217,28 @@ if __name__ == "__main__":
         #for nt in ep_data['nametables']:
         #    plt.imshow(nt/255.)
         #    plt.show()
+        #print ep_data['sprite_data']
         (ep_tracks, old_ep_tracks) = tracking.tracks_from_sprite_data(
             ep_data["sprite_data"])
+
+
         
         for track in ep_tracks:
+            trackData = []
             first = float('nan')
             for ts in sorted(ep_tracks[track]):
                 if  first != first:
                     first = ep_tracks[track][ts][1][1]
+                trackData.append([ts,240-ep_tracks[track][ts][1][1]])
                 if ep_tracks[track][ts][1][1] > first:
                     ep_tracks[track][ts] = list(ep_tracks[track][ts])
                     ep_tracks[track][ts][1] = list(ep_tracks[track][ts][1])
                     ep_tracks[track][ts][1][1] = first
                     ep_tracks[track][ts][1] = tuple(ep_tracks[track][ts][1])
-                    print 'after',ep_tracks[track][ts]
+            trackData = np.array(trackData)
+            #print track
+            #plt.plot(trackData[:,0],trackData[:,1])
+            #plt.show()
         episode_outputs.append((jump_len,
                                 inputs,
                                 ep_data,
@@ -247,6 +255,17 @@ if __name__ == "__main__":
         # Also skip anything which was not present at start
         if 0 not in track_dict:
             continue
+        good = True
+        for ep in episode_outputs:
+            if trackID not in ep[-1]:
+                good = False
+                break
+            else:
+                if 0 not in ep[-1][trackID]:
+                    good = False
+        if not good:
+            continue
+        
         sprite = track_dict[0][1]
         went_up = False
         start_y = sprite[1]
@@ -279,8 +298,8 @@ if __name__ == "__main__":
             player_controlled.add(trackID)
         print trackID
         track_data = np.array(track_data)
-        #plt.plot(track_data[:,0],track_data[:,1])
-        #plt.show()
+        plt.plot(track_data[:,0],track_data[:,1])
+        plt.show()
         
     assert len(player_controlled) > 0
     if len(player_controlled) > 1:

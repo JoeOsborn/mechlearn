@@ -458,6 +458,16 @@ if __name__ == "__main__":
         # Also skip anything which was not present at start
         if 0 not in track_dict:
             continue
+        good = True
+        for ep in episode_outputs:
+            if trackID not in ep[-1]:
+                good = False
+                break
+            else:
+                if 0 not in ep[-1][trackID]:
+                    good = False
+        if not good:
+            continue
         sprite = track_dict[0][1]
         went_up = False
         start_y = sprite[1]
