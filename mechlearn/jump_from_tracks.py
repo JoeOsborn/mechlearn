@@ -261,8 +261,22 @@ def model_params_to_ha(minHold, maxHold, t):
              ("*", t["up-fixed_dy_weights__0"], ("x", 1)),
              ("*", t["up-fixed_dy_weights__1"], ("y", 1)))
         )
-        # Treat up-fixed as a continuation of up-control
-        m.params["upControlToUpFixedDYReset"] = ("y", 1)
+
+    m.params["upControlToDownDYReset"] = m.params["upFixedToDownDYReset"] = (
+        "+",
+        t["down_dy_weights__2"] / DT,
+        ("+",
+         ("*", t["down_dy_weights__0"], ("x", 1)),
+         ("*", t["down_dy_weights__1"], ("y", 1)))
+    )
+    m.params["downToGroundDYReset"] = (
+        "+",
+        t["ground_dy_weights__2"] / DT,
+        ("+",
+         ("*", t["ground_dy_weights__0"], ("x", 1)),
+         ("*", t["ground_dy_weights__1"], ("y", 1)))
+    )
+
     return m
 
 def test_model(trials, minHold, maxHold, traceLinearAndClip, outputname):
@@ -311,8 +325,7 @@ def test_model(trials, minHold, maxHold, traceLinearAndClip, outputname):
                         else []))
                 modelModes.append(mode_nums[val.state])
                 modelYs.append(val.variables[("y", 0)])
-                # print
-                # mi,val.state,val.variables[("y",0)],val.variables[("y",1)],stats.y.allVals[mi+1]
+                # print mi,val.state,val.variables[("y",0)],val.variables[("y",1)],stats.y.allVals[mi+1]
             modelYs.append(modelYs[-1])
             modelModes.append(mode_nums[val.state])
         plt.plot(modelYs, "-")
