@@ -113,7 +113,7 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
             transitions = switch_conditions[state]
             for target, condition in transitions.items():
                 if condition(moves, i, stats):
-                    print "Record " + state + "->" + target, state_change_t, t, "prev dy", str(all_vbls["dy"][state_change_t - 1])
+                    print "Record " + state + "->" + target, state_change_t, t, "prev dy", (all_vbls["dy"][state_change_t - 1]), "prev dx", str(all_vbls["dy"][state_change_t - 1])
                     record_run(modes, state, state_change_t, vbls, all_vbls)
                     state_change_t = t
                     vbls["x"] = []
@@ -216,66 +216,95 @@ def fit_model(modes):
     return (modelLinearAndClip, traceLinearAndClip)
 
 
-def test_model(trials, minHold, maxHold, traceLinearAndClip,outputname):
+def model_params_to_ha(minHold, maxHold, t):
+    m = copy.deepcopy(marioModel)
+    m.params["gravity"].update(t["down_dy_acc"] / (DT * DT), True)
+    if minHold != maxHold:
+        m.params["up-control-gravity"].update(
+            t["up-control_dy_acc"] / (DT * DT),
+            True
+        )
+    else:
+        # We didn't learn anything for up-control, so use up-fixed instead.
+        m.params["up-control-gravity"].update(
+            t["up-fixed_dy_acc"] / (DT * DT),
+            True
+        )
+    m.params["up-fixed-gravity"].update(
+        t["up-fixed_dy_acc"] / (DT * DT),
+        True
+    )
+    m.params["minButtonDuration"].update(minHold * DT, True)
+    m.params["maxButtonDuration"].update(maxHold * DT, True)
+
+    if minHold != maxHold:
+        m.params["groundToUpControlDYReset"] = (
+            "+",
+            t["up-control_dy_weights__2"] / DT,
+            ("+",
+             ("*", t["up-control_dy_weights__0"], ("x", 1)),
+             ("*", t["up-control_dy_weights__1"], ("y", 1)))
+        )
+        m.params["upControlToUpFixedDYReset"] = (
+            "+",
+            t["up-fixed_dy_weights__2"] / DT,
+            ("+",
+             ("*", t["up-fixed_dy_weights__0"], ("x", 1)),
+             ("*", t["up-fixed_dy_weights__1"], ("y", 1)))
+        )
+    else:
+        # Some hacking around the HA structure
+        m.params["groundToUpControlDYReset"] = (
+            "+",
+            t["up-fixed_dy_weights__2"] / DT,
+            ("+",
+             ("*", t["up-fixed_dy_weights__0"], ("x", 1)),
+             ("*", t["up-fixed_dy_weights__1"], ("y", 1)))
+        )
+
+    m.params["upControlToDownDYReset"] = m.params["upFixedToDownDYReset"] = (
+        "+",
+        t["down_dy_weights__2"] / DT,
+        ("+",
+         ("*", t["down_dy_weights__0"], ("x", 1)),
+         ("*", t["down_dy_weights__1"], ("y", 1)))
+    )
+    m.params["downToGroundDYReset"] = (
+        "+",
+        t["ground_dy_weights__2"] / DT,
+        ("+",
+         ("*", t["ground_dy_weights__0"], ("x", 1)),
+         ("*", t["ground_dy_weights__1"], ("y", 1)))
+    )
+
+    return m
+
+def test_model(trials, minHold, maxHold, traceLinearAndClip, outputname):
     # Visualize the new approach with a weight vector and clipping.
     # EXECUTE ME after setting up the third model (no resets, no
     # matrix-ization)
     samples = 200
-    m = copy.deepcopy(marioModel)
-
+   
     realYs = []
     for (_moves, stats) in trials:
         realYs = realYs + stats.y.allVals
     plt.figure(figsize=(20, 10))
     sample = 0
-    for rand_trace in np.random.randint(len(traceLinearAndClip) * 0.75, len(traceLinearAndClip), samples):
+    for rand_trace in np.random.randint(len(traceLinearAndClip) * 0.75,
+                                        len(traceLinearAndClip), samples):
         sample += 1
         t = traceLinearAndClip[rand_trace]
-        m.params["gravity"].update(t["down_dy_acc"] / (DT * DT), True)
-        if minHold != maxHold:
-            m.params[
-                "up-control-gravity"].update(t["up-control_dy_acc"] / (DT * DT), True)
-        else:
-            # We didn't learn anything for up-control, so use up-fixed instead.
-            m.params[
-                "up-control-gravity"].update(t["up-fixed_dy_acc"] / (DT * DT), True)
-        m.params[
-            "up-fixed-gravity"].update(t["up-fixed_dy_acc"] / (DT * DT), True)
-    #     if t["up-fixed_dy_acc"] < 0 or t["up-control_dy_acc"] < 0 or t["down_dy_acc"] > 0:
-    #         # Outlier, ignore
-    #         continue
-        m.params["minButtonDuration"].update(minHold * DT, True)
-        m.params["maxButtonDuration"].update(maxHold * DT, True)
-
-        if minHold != maxHold:
-            m.params["groundToUpControlDYReset"] = (
-                "+",
-                t["up-control_dy_weights"][2] / DT,
-                ("+",
-                 ("*", t["up-control_dy_weights"][0], ("x", 1)),
-                 ("*", t["up-control_dy_weights"][1], ("y", 1)))
-            )
-            m.params["upControlToUpFixedDYReset"] = (
-                "+",
-                t["up-fixed_dy_weights"][2] / DT,
-                ("+",
-                 ("*", t["up-fixed_dy_weights"][0], ("x", 1)),
-                 ("*", t["up-fixed_dy_weights"][1], ("y", 1)))
-            )
-        else:
-            # Some hacking around the HA structure
-            m.params["groundToUpControlDYReset"] = (
-                "+",
-                t["up-fixed_dy_weights"][2] / DT,
-                ("+",
-                 ("*", t["up-fixed_dy_weights"][0], ("x", 1)),
-                 ("*", t["up-fixed_dy_weights"][1], ("y", 1)))
-            )
-            # Treat up-fixed as a continuation of up-control
-            m.params["upControlToUpFixedDYReset"] = ("y", 1)
-
-        # Unused learned weights: ground, down.
-
+        tdict = {}
+        for mn in mode_names:
+            tdict[mn+"_dx_acc"] = t[mn+"_dx_acc"]
+            tdict[mn+"_dy_acc"] = t[mn+"_dy_acc"]
+            tdict[mn+"_dx_weights__0"] = t[mn+"_dx_weights"][0]
+            tdict[mn+"_dx_weights__1"] = t[mn+"_dx_weights"][1]
+            tdict[mn+"_dx_weights__2"] = t[mn+"_dx_weights"][2]
+            tdict[mn+"_dy_weights__0"] = t[mn+"_dy_weights"][0]
+            tdict[mn+"_dy_weights__1"] = t[mn+"_dy_weights"][1]
+            tdict[mn+"_dy_weights__2"] = t[mn+"_dy_weights"][2]
+        m = model_params_to_ha(minHold, maxHold, tdict)
         # then do jump trials with horizontal speed and make sure we learn the right weights.
         # then try to learn the clipping for earlyOutClipVel and other discrete
         # velocity updates
@@ -296,8 +325,7 @@ def test_model(trials, minHold, maxHold, traceLinearAndClip,outputname):
                         else []))
                 modelModes.append(mode_nums[val.state])
                 modelYs.append(val.variables[("y", 0)])
-                # print
-                # mi,val.state,val.variables[("y",0)],val.variables[("y",1)],stats.y.allVals[mi+1]
+                # print mi,val.state,val.variables[("y",0)],val.variables[("y",1)],stats.y.allVals[mi+1]
             modelYs.append(modelYs[-1])
             modelModes.append(mode_nums[val.state])
         plt.plot(modelYs, "-")
@@ -342,60 +370,19 @@ def hold_durations(trackID, episode_outputs):
         if duration <= min_len_duration:
             min_len_duration = duration
             min_interesting_len = jump_len
-        print duration, jump_len,min_len_duration, max_len_duration,min_interesting_len,max_interesting_len
-    min_interesting_len = min(min_interesting_len,max_interesting_len)
-    return  min_interesting_len, max_interesting_len
+        print duration, jump_len, min_len_duration, max_len_duration, min_interesting_len, max_interesting_len
+    min_interesting_len = min(min_interesting_len, max_interesting_len)
+    return min_interesting_len, max_interesting_len
 
 
 def model_to_ha(trials, minHold, maxHold, traceLinearAndClip):
-    m = copy.deepcopy(marioModel)
-    s = pm.df_summary(traceLinearAndClip[int(len(traceLinearAndClip) * 0.7):-1:10])
+    s = pm.df_summary(traceLinearAndClip[len(traceLinearAndClip) * 0.7:-1:10])
     means = s["mean"]
+    m = model_params_to_ha(minHold, maxHold, means)
     print s
     print "-------\nMeans:\n------"
     print means
     print "--------"
-    m.params["gravity"].update(
-        means["down_dy_acc"] / (DT * DT), True)
-    if minHold != maxHold:
-        m.params["up-control-gravity"].update(
-            means["up-control_dy_acc"] / (DT * DT), True)
-    else:
-        # We didn't learn anything for up-control, so use up-fixed instead.
-        m.params["up-control-gravity"].update(
-            means["up-fixed_dy_acc"] / (DT * DT), True)
-    m.params[
-        "up-fixed-gravity"].update(
-            means["up-fixed_dy_acc"] / (DT * DT), True)
-    m.params["minButtonDuration"].update(minHold * DT, True)
-    m.params["maxButtonDuration"].update(maxHold * DT, True)
-
-    if minHold != maxHold:
-        m.params["groundToUpControlDYReset"] = (
-            "+",
-            means["up-control_dy_weights__2"] / DT,
-            ("+",
-             ("*", means["up-control_dy_weights__0"], ("x", 1)),
-             ("*", means["up-control_dy_weights__1"], ("y", 1)))
-        )
-        m.params["upControlToUpFixedDYReset"] = (
-            "+",
-            means["up-fixed_dy_weights__2"] / DT,
-            ("+",
-             ("*", means["up-fixed_dy_weights__0"], ("x", 1)),
-             ("*", means["up-fixed_dy_weights__1"], ("y", 1)))
-        )
-    else:
-        # Some hacking around the HA structure
-        m.params["groundToUpControlDYReset"] = (
-            "+",
-            means["up-fixed_dy_weights__2"] / DT,
-            ("+",
-             ("*", means["up-fixed_dy_weights__0"], ("x", 1)),
-             ("*", means["up-fixed_dy_weights__1"], ("y", 1)))
-        )
-        # Treat up-fixed as a continuation of up-control
-        m.params["upControlToUpFixedDYReset"] = ("y", 1)
     return m
 
 

@@ -312,6 +312,9 @@ and we can start accounting for 3 later (maybe with a Boolean parameter?).
 marioModel = HA(
     {"gravity": Stat(0.0, None),
      "groundToUpControlDYReset": Stat(0.0, None),
+     "upFixedToDownDYReset": Stat(0.0, None),
+     "upControlToDownDYReset": Stat(0.0, None),
+     "downToGroundDYReset": Stat(0.0, None),
      "terminalVY": Stat(100000.0, None),
      "up-control-gravity": Stat(0.0, None),
      "up-fixed-gravity": Stat(0.0, None),
@@ -333,10 +336,10 @@ marioModel = HA(
             # This edge may not always be present.
             HATransition("down",
                          [("colliding", "top", "ground")],
-                         {("y", 1): 0}),
+                         {("y", 1): "upControlToDownDYReset"}),
             HATransition("down",
                          [("gte", ("y", 1), 0)],
-                         None),
+                         {("y", 1): "upControlToDownDYReset"}),
             HATransition("up-fixed",
                          [("timer", "maxButtonDuration")],
                          {("y", 1): "upControlToUpFixedDYReset"}),
@@ -349,10 +352,10 @@ marioModel = HA(
             # This edge may not always be present.
             HATransition("down",
                          [("colliding", "top", "ground")],
-                         {("y", 1): 0}),
+                         {("y", 1): "upFixedToDownDYReset"}),
             HATransition("down",
                          [("gte", ("y", 1), 0)],
-                         None)
+                         {("y", 1): "upFixedToDownDYReset"})
         ]),
         "down": HAState({("y", 2): "gravity"}, [
             # this edge may not always be present.
@@ -360,10 +363,10 @@ marioModel = HA(
             # but our velocity is still positive.
             HATransition("down",
                          [("colliding", "top", "ground")],
-                         {("y", 1): 0}),
+                         None),
             HATransition("ground",
                          [("colliding", "bottom", "ground")],
-                         None)
+                         {("y", 1): "downToGroundDYReset"})
         ]),
         "dead": HAState({("y", 1): 0}, [])
     },

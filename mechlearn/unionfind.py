@@ -5,6 +5,7 @@ http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/215912
 with significant additional changes by D. Eppstein.
 """
 
+
 class UnionFind:
     """Union-find data structure.
 
@@ -47,7 +48,7 @@ class UnionFind:
         for ancestor in path:
             self.parents[ancestor] = root
         return root
-        
+
     def __iter__(self):
         """Iterate through all items ever found or unioned by this structure."""
         return iter(self.parents)
@@ -55,7 +56,7 @@ class UnionFind:
     def union(self, *objects):
         """Find the sets containing the objects and merge them all."""
         roots = [self[x] for x in objects]
-        heaviest = max([(self.weights[r],r) for r in roots])[1]
+        heaviest = max([(self.weights[r], r) for r in roots])[1]
         for r in roots:
             if r != heaviest:
                 self.weights[heaviest] += self.weights[r]
