@@ -71,7 +71,7 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
             "down": lambda moves, movei, stats: stats.y.allVals[movei + 1] > stats.y.allVals[movei]
         },
         "down": {
-            "ground": lambda moves, movei, stats: stats.y.allVals[movei + 1] >= stats.y.allVals[0]
+            "ground": lambda moves, movei, stats:  abs(stats.y.allVals[movei] - stats.y.allVals[movei + 1])  <= 1 and abs(stats.y.allVals[movei + 1] - stats.y.allVals[0]) <= 8
         }
     } if minHold != maxHold else {
         "ground": {
@@ -83,7 +83,7 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
             "down": lambda moves, movei, stats: stats.y.allVals[movei + 1] > stats.y.allVals[movei]
         },
         "down": {
-            "ground": lambda moves, movei, stats: stats.y.allVals[movei + 1] >= stats.y.allVals[0]
+            "ground": lambda moves, movei, stats: abs(stats.y.allVals[movei] - stats.y.allVals[movei + 1])  <= 1 and abs(stats.y.allVals[movei + 1] - stats.y.allVals[0]) <= 8
         }
     }
 

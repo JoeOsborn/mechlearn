@@ -69,7 +69,7 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
             "down": lambda moves, movei, stats: stats.y.allVals[movei + 1] > stats.y.allVals[movei]
         },
         "down": {
-            "ground": lambda moves, movei, stats: stats.y.allVals[movei + 1] >= stats.y.allVals[0]
+            "ground": lambda moves, movei, stats: abs(stats.y.allVals[movei] - stats.y.allVals[movei + 1])  <= 1 and abs(stats.y.allVals[movei + 1] - stats.y.allVals[0]) <= 8
         }
     } if minHold != maxHold else {
         "ground": {
@@ -81,7 +81,7 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
             "down": lambda moves, movei, stats: stats.y.allVals[movei + 1] > stats.y.allVals[movei]
         },
         "down": {
-            "ground": lambda moves, movei, stats: stats.y.allVals[movei + 1] >= stats.y.allVals[0]
+            "ground": lambda moves, movei, stats: abs(stats.y.allVals[movei] - stats.y.allVals[movei + 1]) <= 1 and abs(stats.y.allVals[movei + 1] - stats.y.allVals[0]) <= 8
         }
     }
 
@@ -113,6 +113,8 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
                 if condition(moves, i, stats):
                     print "Record " + state + "->" + target, state_change_t, t, "prev dy", str(all_vbls["dy"][state_change_t - 1])
                     record_run(modes, state, state_change_t, vbls, all_vbls)
+                    plt.plot(vbls['y'])
+                    plt.show()
                     state_change_t = t
                     vbls["x"] = []
                     vbls["y"] = []
@@ -298,8 +300,8 @@ if __name__ == "__main__":
             player_controlled.add(trackID)
         print trackID
         track_data = np.array(track_data)
-        plt.plot(track_data[:,0],track_data[:,1])
-        plt.show()
+        #plt.plot(track_data[:,0],track_data[:,1])
+        #plt.show()
         
     assert len(player_controlled) > 0
     if len(player_controlled) > 1:
@@ -332,3 +334,10 @@ if __name__ == "__main__":
             plt.savefig('{}_track_{}.png'.format(outputname,trackID))
             plt.clf()
             trials.append((inputs, stats))
+        if actually_boring:
+            print ("Sprite",
+                   trackID,
+                   "actually wasn't there for all experiments")
+            continue
+        print "Generate labeled data"
+        by_mode = generate_labeled_data(trials, min_len, max_len, jumpButton)
