@@ -1,14 +1,14 @@
-param: up-control-gravity : 582.857161014
-param: upFixedToDownDYReset : ('+', 37.722395527868265, ('+', ('*', -1.7471262194631052, ('x', 1)), ('*', 0.36445293132044643, ('y', 1))))
-param: upControlToDownDYReset : ('+', 37.722395527868265, ('+', ('*', -1.7471262194631052, ('x', 1)), ('*', 0.36445293132044643, ('y', 1))))
+param: up-control-gravity : 1010.96988734
+param: upFixedToDownDYReset : ('+', 18.982180446203575, ('+', ('*', -16.867628973372057, ('x', 1)), ('*', 0.9767009395902051, ('y', 1))))
+param: upControlToDownDYReset : ('+', 18.982180446203575, ('+', ('*', -16.867628973372057, ('x', 1)), ('*', 0.9767009395902051, ('y', 1))))
 param: terminalVY : 100000.0
-param: up-fixed-gravity : -6.95786935188
-param: gravity : 639.452046134
-param: downToGroundDYReset : ('+', 1.28745399439255, ('+', ('*', 1.401419913697318, ('x', 1)), ('*', -0.0043964223285348387, ('y', 1))))
-param: maxButtonDuration : 0.416666666667
-param: minButtonDuration : 0.05
-param: upControlToUpFixedDYReset : ('+', 7.2388698402984524, ('+', ('*', 2.1230960824261484, ('x', 1)), ('*', 0.060455596645549822, ('y', 1))))
-param: groundToUpControlDYReset : ('+', 14.374145270792321, ('+', ('*', -8.6918939020062105, ('x', 1)), ('*', 1.3730378833198185, ('y', 1))))
+param: up-fixed-gravity : 1010.96988734
+param: gravity : 841.202915208
+param: downToGroundDYReset : ('+', 0.0028893835090770992, ('+', ('*', 2.7494537033690447, ('x', 1)), ('*', -6.4490209444114786e-06, ('y', 1))))
+param: maxButtonDuration : 0.0333333333333
+param: minButtonDuration : 0.0333333333333
+param: upControlToUpFixedDYReset : 0.0
+param: groundToUpControlDYReset : ('+', -311.52912298083214, ('+', ('*', -9.0729016447369712, ('x', 1)), ('*', -0.028748877941154417, ('y', 1))))
 vbl: ('y', 1) : 0.0
 vbl: ('x', 0) : 0.0
 vbl: ('y', 2) : 0.0

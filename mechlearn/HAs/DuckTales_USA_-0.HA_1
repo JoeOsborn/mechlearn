@@ -1,11 +1,14 @@
-param: up-control-gravity : 713.215498114
+param: up-control-gravity : 713.016265746
+param: upFixedToDownDYReset : ('+', 29.45542475766435, ('+', ('*', 4.850601005518806, ('x', 1)), ('*', 1.7760060483287214, ('y', 1))))
+param: upControlToDownDYReset : ('+', 29.45542475766435, ('+', ('*', 4.850601005518806, ('x', 1)), ('*', 1.7760060483287214, ('y', 1))))
 param: terminalVY : 100000.0
-param: up-fixed-gravity : 2.88062373291e-07
-param: gravity : 114.926763833
+param: up-fixed-gravity : 211.077632912
+param: gravity : 708.152214186
+param: downToGroundDYReset : ('+', 3.9128145044367817, ('+', ('*', 0.004529229716264167, ('x', 1)), ('*', -0.010896387284512542, ('y', 1))))
 param: maxButtonDuration : 0.416666666667
 param: minButtonDuration : 0.05
-param: upControlToUpFixedDYReset : ('+', -5.2241554103131688e-09, ('+', ('*', -1.0796177764312251, ('x', 1)), ('*', 1.1425873720640033e-11, ('y', 1))))
-param: groundToUpControlDYReset : ('+', -293.75836484728256, ('+', ('*', 9.1411664605048717, ('x', 1)), ('*', 1.3460320804070234, ('y', 1))))
+param: upControlToUpFixedDYReset : ('+', -0.71623032637346329, ('+', ('*', 1.8818678384884004, ('x', 1)), ('*', 0.039763645389565075, ('y', 1))))
+param: groundToUpControlDYReset : ('+', -293.70089585826315, ('+', ('*', -9.7369815833973661, ('x', 1)), ('*', 6.7850500854033653, ('y', 1))))
 vbl: ('y', 1) : 0.0
 vbl: ('x', 0) : 0.0
 vbl: ('y', 2) : 0.0
@@ -16,18 +19,18 @@ constraint: ('y', 1) : (-1000000.0, 'terminalVY')
 initial: ground
 startstate: down
 flow: ('y', 2) gravity
-t: [('colliding', 'top', 'ground')] : {('y', 1): 0} : down
-t: [('colliding', 'bottom', 'ground')] : None : ground
+t: [('colliding', 'top', 'ground')] : None : down
+t: [('colliding', 'bottom', 'ground')] : {('y', 1): 'downToGroundDYReset'} : ground
 endstate: down
 startstate: up-fixed
 flow: ('y', 2) up-fixed-gravity
-t: [('colliding', 'top', 'ground')] : {('y', 1): 0} : down
-t: [('gte', ('y', 1), 0)] : None : down
+t: [('colliding', 'top', 'ground')] : {('y', 1): 'upFixedToDownDYReset'} : down
+t: [('gte', ('y', 1), 0)] : {('y', 1): 'upFixedToDownDYReset'} : down
 endstate: up-fixed
 startstate: up-control
 flow: ('y', 2) up-control-gravity
-t: [('colliding', 'top', 'ground')] : {('y', 1): 0} : down
-t: [('gte', ('y', 1), 0)] : None : down
+t: [('colliding', 'top', 'ground')] : {('y', 1): 'upControlToDownDYReset'} : down
+t: [('gte', ('y', 1), 0)] : {('y', 1): 'upControlToDownDYReset'} : down
 t: [('timer', 'maxButtonDuration')] : {('y', 1): 'upControlToUpFixedDYReset'} : up-fixed
 t: [('button', 'off', 'jump'), ('timer', 'minButtonDuration')] : {('y', 1): 'upControlToUpFixedDYReset'} : up-fixed
 endstate: up-control
