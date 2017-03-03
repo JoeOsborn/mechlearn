@@ -50,7 +50,15 @@ def record_run(modes, state, t, vbls, all_vbls):
 
 def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
     modes = {m: [] for m in mode_names}
-    # Let's learn three linear-or-constant velocity models.
+    # These are a bit redundant to the guard/edge structure of the
+    # mario HA, but cleaner for processing the data and parameter-free.
+    # they are fragile in the sense that they only work for jumps that
+    # land at the Y-value where they start.
+    # these are answering questions like "looking at the outputs and the
+    # exogenous variables and the parameters we know already, what
+    # mode are we in?"  They're not necessarily causal in the same way
+    # as guards.  could probably be learned using an SVM or a CHARDA-like
+    # approach or something.
     switch_conditions = {
         "ground": {
             # starting to rise
@@ -71,6 +79,8 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
             "down": lambda moves, movei, stats: stats.y.allVals[movei + 1] > stats.y.allVals[movei]
         },
         "down": {
+            # Wrinkle: "near" the ground because some characters do weird 1-pixel things in their
+            # on-the-ground animation
             "ground": lambda moves, movei, stats:  abs(stats.y.allVals[movei] - stats.y.allVals[movei + 1])  <= 1 and abs(stats.y.allVals[movei + 1] - stats.y.allVals[0]) <= 8
         }
     } if minHold != maxHold else {
@@ -83,6 +93,8 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
             "down": lambda moves, movei, stats: stats.y.allVals[movei + 1] > stats.y.allVals[movei]
         },
         "down": {
+            # Wrinkle: "near" the ground because some characters do weird 1-pixel things in their
+            # on-the-ground animation
             "ground": lambda moves, movei, stats: abs(stats.y.allVals[movei] - stats.y.allVals[movei + 1])  <= 1 and abs(stats.y.allVals[movei + 1] - stats.y.allVals[0]) <= 8
         }
     }
@@ -90,8 +102,9 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
     t = 0
     state_change_t = 0  # start at 1 just so state_change_t - 1 doesn't wrap
     trials = allTrials
+    # Concatenate all the trial data for each mode together
+    # to build labeled x/y data suitable as "observations".
     all_vbls = dict(x=[], y=[], dx=[], dy=[], t=[])
-    # Tweak the range and increment to get more precise/slower fitting.
     for moves, stats in trials:
         state = "ground"
         vbls = dict(x=[], y=[], dx=[], dy=[], t=[])
@@ -261,6 +274,14 @@ def model_params_to_ha(minHold, maxHold, t):
              ("*", t["up-fixed_dy_weights__0"], ("x", 1)),
              ("*", t["up-fixed_dy_weights__1"], ("y", 1)))
         )
+        # Some hacking around the HA structure
+        m.params["upControlToUpFixedDYReset"] = (
+            "+",
+            0,
+            ("+",
+             ("*", 0, ("x", 1)),
+             ("*", 1, ("y", 1)))
+        )
 
     m.params["upControlToDownDYReset"] = m.params["upFixedToDownDYReset"] = (
         "+",
@@ -372,6 +393,8 @@ def hold_durations(trackID, episode_outputs):
             min_interesting_len = jump_len
         print duration, jump_len, min_len_duration, max_len_duration, min_interesting_len, max_interesting_len
     min_interesting_len = min(min_interesting_len, max_interesting_len)
+    if max_interesting_len == episode_outputs[-1][0]:
+        print "WARNING: Max interesting len is just as big as the longest jump!  This could be a bug, or maybe you need to increase your upper limit!"
     return min_interesting_len, max_interesting_len
 
 
