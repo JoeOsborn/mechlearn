@@ -109,12 +109,13 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
         print "Move count:" + str(len(moves)) + " min hold:" + str(minHold)
         for i, m in enumerate(moves):
             transitions = switch_conditions[state]
+            if i+1 >= len(stats.y.allVals):
+                break
             for target, condition in transitions.items():
+                
                 if condition(moves, i, stats):
                     print "Record " + state + "->" + target, state_change_t, t, "prev dy", str(all_vbls["dy"][state_change_t - 1])
                     record_run(modes, state, state_change_t, vbls, all_vbls)
-                    plt.plot(vbls['y'])
-                    plt.show()
                     state_change_t = t
                     vbls["x"] = []
                     vbls["y"] = []
@@ -136,7 +137,7 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
             if t < 20:
                 print t, all_vbls["t"], (m & jumpButton), i, (minHold - 1)
             t += 1
-            if state == "ground" and i > 5:
+            if state == "ground" and i > 16:
                 break
         # Force to ground state. Collections will be reset at the front of the
         # next loop.

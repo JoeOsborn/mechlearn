@@ -111,6 +111,8 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
         print "Move count:" + str(len(moves)) + " min hold:" + str(minHold)
         for i, m in enumerate(moves):
             transitions = switch_conditions[state]
+            if i+1 >= len(stats.y.allVals):
+                break
             for target, condition in transitions.items():
                 if condition(moves, i, stats):
                     print "Record " + state + "->" + target, state_change_t, t, "prev dy", (all_vbls["dy"][state_change_t - 1]), "prev dx", str(all_vbls["dy"][state_change_t - 1])
@@ -136,7 +138,7 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
             if t < 20:
                 print t, all_vbls["t"], (m & jumpButton), i, (minHold - 1)
             t += 1
-            if state == "ground" and i > 5:
+            if state == "ground" and i > 15:
                 break
         # Force to ground state. Collections will be reset at the front of the
         # next loop.
@@ -376,7 +378,7 @@ def hold_durations(trackID, episode_outputs):
 
 
 def model_to_ha(trials, minHold, maxHold, traceLinearAndClip):
-    s = pm.df_summary(traceLinearAndClip[len(traceLinearAndClip) * 0.7:-1:10])
+    s = pm.df_summary(traceLinearAndClip[int(len(traceLinearAndClip) * 0.7):-1:10])
     means = s["mean"]
     m = model_params_to_ha(minHold, maxHold, means)
     print s
@@ -527,12 +529,13 @@ if __name__ == "__main__":
             continue
         print "Generate labeled data"
         by_mode = generate_labeled_data(trials, min_len, max_len, jumpButton)
+        print by_mode
         # fit
         print "Fit model"
         model, trace = fit_model(by_mode)
         # test
         print "Test model"
-        test_model(trials, min_len, max_len, trace,'{}_{}'.format(outputname,trackID))
+        #test_model(trials, min_len, max_len, trace,'{}_{}'.format(outputname,trackID))
         # TODO: output images to help debug problems
         ha = model_to_ha(trials, min_len, max_len, trace)
         print "----------"
