@@ -1,0 +1,14 @@
+param: minHoldDuration: 1
+param: maxHoldDuration: 20
+param: down_fixed_reset: 65.7600978489
+param: down_prev_mult: 0.0
+param: down_gravity: 326.751900828
+param: up-control_fixed_reset: -316.704528795
+param: up-control_prev_mult: 0.0
+param: up-control_gravity: 350.678664542
+param: up-fixed_fixed_reset: 8.76923076923
+param: up-fixed_prev_mult: 1047.42081448
+param: up-fixed_gravity: 472.398190045
+param: ground_fixed_reset: -12.5728374925
+param: ground_prev_mult: 1135.69175334
+param: ground_gravity: -235.193697354
