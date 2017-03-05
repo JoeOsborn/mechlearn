@@ -1,9 +1,0 @@
-param: minHoldDuration: 1
-param: maxHoldDuration: 1
-param: down_reset: 0.0
-param: down_gravity: 0.0
-Warning, no witness states for mode up-control
-param: up-fixed_reset: -25.8668896321
-param: up-fixed_gravity: 39.397993311
-param: ground_reset: -1.33226762955e-12
-param: ground_gravity: -3.59712259979e-12

@@ -1,0 +1,16 @@
+startha
+param: minHoldDuration: 1
+param: maxHoldDuration: 18
+param: down_reset: 0.659658991547
+param: down_mult: 0.835085252113
+param: down_gravity: 0.192373734349
+param: up-control_reset: -5.01160015343
+param: up-control_mult: 5.01160015343
+param: up-control_gravity: 0.164845031949
+param: up-fixed_reset: -1.0545858749
+param: up-fixed_mult: 0.0386734486123
+param: up-fixed_gravity: 0.225894337695
+param: ground_reset: 0.0753412502782
+param: ground_mult: -0.017261429119
+param: ground_gravity: -0.00104383041449
+endha
