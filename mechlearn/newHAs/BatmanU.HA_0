@@ -1,12 +1,12 @@
 param: minHoldDuration: 1
 param: maxHoldDuration: 1
-param: down_fixed_reset: 0.310972757644
+param: down_fixed_reset: 0.533819994545
 param: down_prev_mult: 0.0
-param: down_gravity: 275.236171453
+param: down_gravity: 274.895054815
 Warning, no witness states for mode up-control
-param: up-fixed_fixed_reset: -206.387612414
+param: up-fixed_fixed_reset: -211.044745737
 param: up-fixed_prev_mult: 0.0
-param: up-fixed_gravity: 199.885838169
+param: up-fixed_gravity: 215.868378398
 param: ground_fixed_reset: 0.0
 param: ground_prev_mult: 0.0
 param: ground_gravity: 0.0

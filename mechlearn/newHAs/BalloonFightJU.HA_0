@@ -7,6 +7,6 @@ Warning, no witness states for mode up-control
 param: up-fixed_fixed_reset: -41.9117647059
 param: up-fixed_prev_mult: 0.0
 param: up-fixed_gravity: 414.705882353
-param: ground_fixed_reset: 108.027836333
+param: ground_fixed_reset: 131.792472731
 param: ground_prev_mult: 0.0
-param: ground_gravity: -491.70197134
+param: ground_gravity: -624.698646543
