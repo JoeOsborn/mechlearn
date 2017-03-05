@@ -29,7 +29,7 @@ def hold(mask, duration):
 
 def jump_seqs(minHeldFrames=1, maxHeldFrames=120, step=10,button=0x01):
     # TODO: Could get away with a shorter end hold?
-    return [(t, hold(jumpButton, t) + hold(0x0, 480))
+    return [(t, hold(jumpButton, t) + hold(0x0, 240))
             for t in   ([minHeldFrames] + list(range(minHeldFrames-1+step, maxHeldFrames + 1,step)))]
 
 
@@ -66,7 +66,8 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
         },
         "up-fixed": {
             # TODO: or hit ceiling
-            "down": lambda moves, movei, stats: stats.y.allVals[movei + 1] > stats.y.allVals[movei]
+            "down": lambda moves, movei, stats: (stats.y.allVals[movei] >= stats.y.allVals[movei-1] and
+                                                 stats.y.allVals[movei + 1] >= stats.y.allVals[movei])
         },
         "down": {
             "ground": lambda moves, movei, stats: abs(stats.y.allVals[movei] - stats.y.allVals[movei + 1])  <= 1 and abs(stats.y.allVals[movei + 1] - stats.y.allVals[0]) <= 8
@@ -78,7 +79,8 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
         },
         "up-fixed": {
             # TODO: or hit ceiling
-            "down": lambda moves, movei, stats: stats.y.allVals[movei + 1] > stats.y.allVals[movei]
+             "down": lambda moves, movei, stats: (stats.y.allVals[movei] >= stats.y.allVals[movei-1] and
+                                                 stats.y.allVals[movei + 1] >= stats.y.allVals[movei])
         },
         "down": {
             "ground": lambda moves, movei, stats: abs(stats.y.allVals[movei] - stats.y.allVals[movei + 1]) <= 1 and abs(stats.y.allVals[movei + 1] - stats.y.allVals[0]) <= 8
@@ -115,6 +117,9 @@ def generate_labeled_data(allTrials, minHold, maxHold, jumpButton):
                 
                 if condition(moves, i, stats):
                     print "Record " + state + "->" + target, state_change_t, t, "prev dy", str(all_vbls["dy"][state_change_t - 1])
+                    print  all_vbls['y'][state_change_t - 1:t]
+                    #plt.plot(all_vbls['y'][state_change_t - 1:t],'x-')
+                    #plt.show()
                     record_run(modes, state, state_change_t, vbls, all_vbls)
                     state_change_t = t
                     vbls["x"] = []
@@ -188,6 +193,40 @@ def hold_durations(trackID, episode_outputs):
     min_interesting_len = min(min_interesting_len,max_interesting_len)
     return  min_interesting_len, max_interesting_len
 
+
+def fit_model(modes,minlen,maxlen):
+    import statsmodels.api as sm
+    print 'startha'
+    print 'param: minHoldDuration: {}'.format(minlen)
+    print 'param: maxHoldDuration: {}'.format(maxlen)
+    
+    for m in modes:
+        if len(modes[m]) == 0:
+            print "Warning, no witness states for mode " + m
+            continue
+
+        
+        allVals = []
+        allTs = []
+        allPrevs = []
+        for _s, prevs, vbls in modes[m]:
+            allVals = allVals + list(vbls['y'])
+            allTs = allTs + list(vbls["t"])
+        allVals = np.array(allVals)
+        allTs = np.array(allTs).reshape(-1,1)
+        lastY = 0
+        for ii in range(len(allVals)):
+            if allTs[ii] == 0:
+                lastY = allVals[ii]
+            allVals[ii] -= lastY
+        allTs = np.hstack((np.ones(allTs.shape),allTs,allTs*allTs))
+        mod = sm.OLS(allVals,allTs)
+        res = mod.fit()
+        print 'param: {}_reset: {}'.format(m,res.params[1]*60.0)
+        print 'param: {}_gravity: {}'.format(m,res.params[2]*3600.0)
+    print 'endha'
+        
+        
 if __name__ == "__main__":
     rom = sys.argv[1]
     start_movie = sys.argv[2]
@@ -342,3 +381,9 @@ if __name__ == "__main__":
             continue
         print "Generate labeled data"
         by_mode = generate_labeled_data(trials, min_len, max_len, jumpButton)
+        fit_model(by_mode,min_len,max_len)
+        pickle.dump((rom, start_movie,
+                     jumpButton,
+                     trackID, trials,
+                     min_len, max_len,
+                     by_mode,episode_outputs),open('learned{}_track{}_.pkl'.format(outputname,trackID),'wb'))
