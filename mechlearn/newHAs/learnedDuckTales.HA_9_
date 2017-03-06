@@ -4,13 +4,13 @@ param: maxHoldDuration: 48
 param: down_reset: 0.0
 param: down_mult: 0.0
 param: down_gravity: 0.0
-param: up-control_reset: -4.57227891156
+param: up-control_reset: -4.7
 param: up-control_mult: 0.0
-param: up-control_gravity: 0.192792010421
+param: up-control_gravity: 0.2
 param: up-fixed_reset: 0.0
 param: up-fixed_mult: 0.0
 param: up-fixed_gravity: 0.0
-param: ground_reset: 0.0
-param: ground_mult: 0.0
-param: ground_gravity: 0.0
+param: ground_reset: 0
+param: ground_mult: 0
+param: ground_gravity: 0
 endha
