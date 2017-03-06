@@ -1,16 +1,16 @@
 startha
 param: minHoldDuration: 1
 param: maxHoldDuration: 20
-param: down_reset: 0.274213491415
-param: down_mult: 1.13111880948
-param: down_gravity: 0.243334623886
-param: up-control_reset: -4.13195963985
-param: up-control_mult: 5.13195963985
-param: up-control_gravity: 0.18296418419
-param: up-fixed_reset: -0.143799608288
-param: up-fixed_mult: 0.755592206989
-param: up-fixed_gravity: 2.03278012576
-param: ground_reset: 0.0379870537733
-param: ground_mult: -0.00774010829015
-param: ground_gravity: -0.00132999242331
+param: down_reset: 0.563016602159
+param: down_mult: 0.0
+param: down_gravity: 0.19388306194
+param: up-control_reset: -4.15173978644
+param: up-control_mult: 0.0
+param: up-control_gravity: 0.184514124528
+param: up-fixed_reset: -0.165524216204
+param: up-fixed_mult: 0.742330598944
+param: up-fixed_gravity: 2.02135071356
+param: ground_reset: 0.0
+param: ground_mult: 0.0
+param: ground_gravity: 0.0
 endha
