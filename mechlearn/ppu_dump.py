@@ -53,8 +53,8 @@ def ppu_output(emu, inputVec, **kwargs):
     net_x = 0
     # assume scrolling < K px per frame
     scroll_window = 5
-    offset_left = 4
-    offset_top = 4
+    offset_left = 8
+    offset_top = 8
     motion = {}
     for timestep, inp in enumerate(inputVec):
         emu.stepFull(inp, 0x0)
@@ -92,6 +92,7 @@ def ppu_output(emu, inputVec, **kwargs):
         # framebuffer.
 
         if get_scroll and timestep > 0:
+            # TODO: maybe instead consider a span of columns on the left and middle and right and a span of rows on the top and middle and bottom, and see which of those are moving in what direction, and take the biggest/average scroll?
             result = cv2.matchTemplate(
                 np_image,
                 np_image_prev[offset_top:240 - offset_top * 2,
@@ -99,7 +100,7 @@ def ppu_output(emu, inputVec, **kwargs):
                 cv2.TM_CCOEFF_NORMED
             )
             minv, maxv, minloc, maxloc = cv2.minMaxLoc(result)
-            # print minv, maxv, minloc, maxloc
+            print minv, maxv, minloc, maxloc
             best_sx, best_sy = 0, 0
             cx, cy = offset_left, offset_top
             best_match = result[cy, cx]
@@ -114,7 +115,7 @@ def ppu_output(emu, inputVec, **kwargs):
                         best_match = match
 
             net_x -= best_sx
-            # print "Offset:", best_sx, best_sy, net_x
+            print "Offset:", best_sx, best_sy, net_x
             motion[timestep] = (-best_sx, -best_sy)
             np_image_temp = np_image
             np_image = np_image_prev
@@ -123,12 +124,20 @@ def ppu_output(emu, inputVec, **kwargs):
         if display:
             outputImage(emu, 'images/{}'.format(timestep), img_buffer)
 
-        nt_index = pointer_to_numpy(emu.fc.ppu.values)[0] & 0x3
         if get_bg_data:
+            nt_index = pointer_to_numpy(emu.fc.ppu.values)[0] & 0x3
             # nt
+            # Getting the mirroring right and grabbing the right tile seems
+            # done by the PPUTile function in fceulib's ppu.cc.
+            # But it has lots of parameters including ones related to MMC5HackMode
+            #  and other mapper stuff.  Because mappers are determined by mirroring!
+            #  But it also relies on the global Pline to figure out which row it's in...
+            #  and the `scanline` global...
+            # 
             nt = pointer_to_numpy(emu.fc.ppu.NTARAM)
             attr = nt[(nt_index * 1024 + 960):(nt_index * 1024 + 1024)]
             nt = nt[(nt_index * 1024):(nt_index * 1024 + 960)]
+            print nt_index, nt.shape
             nt = nt.reshape(30, 32)
             attr = attr.reshape(8, 8)
             full_attr = np.zeros([16, 16])
@@ -146,6 +155,7 @@ def ppu_output(emu, inputVec, **kwargs):
             full_attr = full_attr[:15, :]
             full_attr = np.kron(full_attr, np.ones((2, 2)))
             nametables = (nt, full_attr)
+
             nt_index = 1 - nt_index
             # nt2
             nt = pointer_to_numpy(emu.fc.ppu.NTARAM)

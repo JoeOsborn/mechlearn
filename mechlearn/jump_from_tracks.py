@@ -32,7 +32,7 @@ def hold(mask, duration):
 def jump_seqs(minHeldFrames=1, maxHeldFrames=120, step=10,button=0x01):
     # TODO: Could get away with a shorter end hold?
     return [(t, hold(jumpButton, t) + hold(0x0, 480))
-            for t in   ([minHeldFrames] + list(range(minHeldFrames-1+step, maxHeldFrames + 1,step)))]
+            for t in ([minHeldFrames] + list(range(minHeldFrames-1+step, maxHeldFrames + 1,step)))]
 
 
 mode_names = ["ground", "up-control", "up-fixed", "down"]
