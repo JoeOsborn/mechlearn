@@ -15,26 +15,18 @@ library(readr)
 #----------------------------------------------
 # Load data
 #----------------------------------------------
-library(readr)
-extract <- read_delim("~/DevProjects/jupyter/mechlearn/docs/jumpymcjumpface/HAs.tsv", 
-                          "\t", escape_double = FALSE, col_types = cols(`ReleaseDate-US` = col_date(format = "%m/%d/%y"), 
-                                                                        down_fixed_reset = col_number(), 
-                                                                        down_gravity = col_number(), down_prev_mult = col_number(), 
-                                                                        down_reset = col_number(), ground_fixed_reset = col_number(), 
-                                                                        ground_gravity = col_number(), ground_prev_mult = col_number(), 
-                                                                        ground_reset = col_number(), maxHoldDuration = col_number(), 
-                                                                        minHoldDuration = col_number(), `up-control_fixed_reset` = col_number(), 
-                                                                        `up-control_gravity` = col_number(), 
-                                                                        `up-control_prev_mult` = col_number(), 
-                                                                        `up-control_reset` = col_number(), 
-                                                                        `up-fixed_fixed_reset` = col_number(), 
-                                                                        `up-fixed_gravity` = col_number(), 
-                                                                        `up-fixed_prev_mult` = col_number(), 
-                                                                        `up-fixed_reset` = col_number()), 
-                          trim_ws = TRUE)
+extract <- read_delim("~/DevProjects/jupyter/mechlearn/docs/jumpymcjumpface/HAs.csv", 
+                  "\t", escape_double = FALSE, col_types = cols(`Date Number` = col_date(format = "%m/%d/%y"), 
+                                                                `ReleaseDate-US` = col_date(format = "%m/%d/%y"), 
+                                                                `up-control_gravity` = col_number(), 
+                                                                `up-control_reset` = col_double()), 
+                  trim_ws = TRUE)
 View(extract)
 
 extract <- data.frame(extract)
+
+# Identify three different types for PCA
+
 
 # Clean extract for observations with missing values in down_fixed_reset
 extract <- extract[which(!is.na(extract$down_fixed_reset)),]
