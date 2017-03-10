@@ -21,7 +21,7 @@ full_kMeans_cluster <- full_kMeansFit$cluster
 table(full_kMeans_cluster)
 full <- data.frame(full, full_kMeans_cluster)
 full_kMeans_profile <- full_kMeansFit$centers
-table(full$Developer,full$full_kMeans_cluster)
+xtable(table(full$Developer,full$full_kMeans_cluster))
 
 #----------------------------------------------
 # Archetypal analysis off games

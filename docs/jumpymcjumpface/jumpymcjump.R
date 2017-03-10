@@ -11,6 +11,7 @@ library(RColorBrewer)
 library(missMDA)
 library(FactoMineR)
 library(readr)
+library(xtable)
 
 #----------------------------------------------
 # Load data

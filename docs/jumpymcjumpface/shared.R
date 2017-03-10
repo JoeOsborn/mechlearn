@@ -21,7 +21,7 @@ shared_kMeans_cluster <- shared_kMeansFit$cluster
 table(shared_kMeans_cluster)
 shared <- data.frame(shared, shared_kMeans_cluster)
 shared_kMeans_profile <- shared_kMeansFit$centers
-table(shared$Developer,shared$shared_kMeans_cluster)
+xtable(table(shared$Developer,shared$shared_kMeans_cluster))
 
 #----------------------------------------------
 # Archetypal analysis of games

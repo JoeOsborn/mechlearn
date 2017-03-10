@@ -10,7 +10,7 @@ rm(i)
 plot(1:15, wss, type="b", xlab="short, number of kMeans Clusters", ylab="Within groups sum of squares")
 rm(wss)
 # K-Means Cluster Analysis
-short_kMeansFit <- kmeans(short[10:ncol(short)-1], 4) # 4 cluster solution
+short_kMeansFit <- kmeans(short[10:ncol(short)-1], 3) # 3 cluster solution
 clusplot(short[10:ncol(short)-1], short_kMeansFit$cluster, color=TRUE, shade=TRUE, labels=1, lines=0, main="Short, kMeans clusters")
 
 # get cluster means
@@ -21,7 +21,7 @@ short_kMeans_cluster <- short_kMeansFit$cluster
 table(short_kMeans_cluster)
 short <- data.frame(short, short_kMeans_cluster)
 short_kMeans_profile <- short_kMeansFit$centers
-table(short$Developer,short$short_kMeans_cluster)
+xtable(table(short$Developer,short$short_kMeans_cluster))
 
 #----------------------------------------------
 # Archetypal analysis of games
