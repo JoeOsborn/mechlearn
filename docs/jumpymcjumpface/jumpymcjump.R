@@ -25,107 +25,50 @@ View(extract)
 
 extract <- data.frame(extract)
 
+# Drop variables that are all 0's
+extract$ground_reset = NULL
+extract$ground_mult = NULL
+extract$ground_gravity = NULL
+
 # Identify three different types for PCA
+extract <- cbind(extract,NA)
+names(extract)[ncol(extract)] <- c("jump_type")
+extract[which(!is.na(extract$up.control_reset)),]$jump_type = "Full"
+extract[which(extract$minHoldDuration == extract$maxHoldDuration),]$jump_type = "Short"
 
+full <- extract[which(extract$jump_type == "Full"),]
 
-# Clean extract for observations with missing values in down_fixed_reset
-extract <- extract[which(!is.na(extract$down_fixed_reset)),]
-View(extract)
+short <- extract[which(extract$jump_type == "Short"),]
+short$up.control_reset = NULL
+short$up.control_gravity = NULL
+short$up.fixed_mult = NULL
 
-# Replace missing values with imputed data (DO WE WANT THIS?)
-
-# Get just the numeric variables
-# Drop up_control_prev_mult which is only 0's or missing
-extractNumerics <- extract[,5:7]
-extractNumerics <- cbind(extractNumerics,extract[,9:ncol(extract)])
-extractImputedPCA <- imputePCA(extractNumerics,ncp = 2)
-extractImputed <- data.frame(extractImputedPCA$completeObs)
-# Rebuild the data set
-extractImputed <- cbind(extract[,1:4],extractImputed)
+shared <- extract[,!apply(is.na(extract), 2, any)]
 
 #----------------------------------------------
 # Visualizations for exploring the data
 #----------------------------------------------
 #Lattice plot of all features in summary statistics
-splom(extractImputed[5:ncol(extractImputed)],main="All features")
+splom(extract[5:ncol(extract)],main="All games")
+
+splom(full[5:ncol(full)],main="Full jumps")
+splom(short[,!apply(is.na(short), 2, any)],main="Short jumps")
+splom(shared[5:ncol(shared)],main="Shared features")
 
 #----------------------------------------------
-# Unrotated PCA
+# Unrotated PCA for all 3 kinds
 #----------------------------------------------
 #Principal component analysis
-#TODO: Imputation should be removed, PCA should be split up into four groups
-#3 different jump types + whatever's shared between all of them
+#3 different jump types, short, full, and one with variables shared between all jumps
 
-pcaFit <- PCA(X = extractImputed[6:ncol(extractImputed)],ncol(extractImputed)-5,scale.unit = TRUE)
-summary(pcaFit)
-plot(pcaFit$eig[,2],type="b", main = "Screeplot, PCA", xlab = "Component", ylab="Variance explained")
+full_pcaFit <- PCA(X = full[10:ncol(full)-1],ncol(full)-10,scale.unit = TRUE)
+summary(full_pcaFit)
+plot(full_pcaFit$eig[,2],type="b", main = "Full, screeplot", xlab = "Component", ylab="Variance explained")
 
-#----------------------------------------------
-# kMeans clustering
-#----------------------------------------------
-#K-means clustering
-wss <- (nrow(extractNumerics[2:ncol(extractNumerics)])-1)*sum(apply(extractNumerics[2:ncol(extractNumerics)],2,var))
-for (i in 2:15){
-  wss[i] <- sum(kmeans(extractNumerics[2:ncol(extractNumerics)], centers=i)$withinss)
-}
-rm(i)
-plot(1:15, wss, type="b", xlab="Number of kMeans Clusters", ylab="Within groups sum of squares")
-rm(wss)
-# K-Means Cluster Analysis
-kMeansFit <- kmeans(extractNumerics[2:ncol(extractNumerics)], 4) # 4 cluster solution
-clusplot(extractNumerics[2:ncol(extractNumerics)], kMeansFit$cluster, color=TRUE, shade=TRUE, labels=1, lines=0, main="kMeans clusters")
+short_pcaFit <- PCA(X = short[10:ncol(short)-1],ncol(short)-10,scale.unit = TRUE)
+summary(short_pcaFit)
+plot(short_pcaFit$eig[,2],type="b", main = "Short, screeplot", xlab = "Component", ylab="Variance explained")
 
-# get cluster means
-aggregate(extractNumerics[2:ncol(extractNumerics)],by=list(kMeansFit$cluster),FUN=mean)
-
-# append cluster assignment to each player
-player_kMeans_cluster <- kMeansFit$cluster
-table(player_kMeans_cluster)
-extractNumerics <- data.frame(extractNumerics, player_kMeans_cluster)
-
-kMeans_profile <- kMeansFit$centers
-
-#----------------------------------------------
-# Archetypal analysis with player scores aggregated across maps 
-#----------------------------------------------
-#Archetypes in player summary statistics
-player_aa <- stepArchetypes(data = extractNumerics[2:(ncol(extractNumerics)-1)], k = 1:15, verbose = FALSE, nrep = 4)
-screeplot(player_aa)
-player_aa5 <- bestModel(player_aa[[5]])
-
-pcplot(player_aa5, extractNumerics[2:8])
-#barplot(player_aa5, extractNumerics[2:(ncol(extractNumerics)-1)])
-
-#Find archetype for each player
-player_aa5_cluster<-max.col(coef(player_aa5))
-#Append to dataset
-extractNumerics <- data.frame(extractNumerics,player_aa5_cluster)
-names(extractNumerics)[ncol(extractNumerics)] <- "Archetype"
-#Archetype counts
-table(player_aa5_cluster)
-#Saving archetype information for plotting
-aa_profile<-parameters(player_aa5)
-
-#----------------------------------------------
-# Plotting clusters and archetypes
-#----------------------------------------------
-#plots K-means
-plot(pcaFit$ind$coord[,1:2], type="n", xlim=(c(-8,4)), ylim=c(-2,3))
-text(pcaFit$ind$coord[,1:2], col=kMeansFit$cluster, labels=kMeansFit$cluster)
-arrows(0, 0, 7*pcaFit$var$coord[,1], 7*pcaFit$var$coord[,2], col = "chocolate", angle = 15, length = 0.025)
-text(2*pcaFit$var$coord[,1], 2*pcaFit$var$coord[,2], labels=names(extractNumerics)[2:8])
-
-#plots archetypes
-plot(pcaFit$ind$coord[,1:2], type="n", xlim=(c(-8,4)), ylim=c(-2,3))
-text(pcaFit$ind$coord[,1:2], col=player_aa5_cluster, labels=player_aa5_cluster)
-arrows(0, 0, 7*pcaFit$var$coord[,1], 7*pcaFit$var$coord[,2], col = "chocolate", angle = 15, length = 0.025)
-text(2*pcaFit$var$coord[,1], 2*pcaFit$var$coord[,2], labels=names(extractNumerics)[2:8])
-
-#plots K-means centroids and archetype profiles together
-#profiles for K-means and archetypes added to original data as supplementary points in order to map the results in a two-dimensional principal component space
-extractNumerics_clusters_archetypes<-rbind(extractNumerics[2:8],aa_profile,kMeans_profile)
-row.names(extractNumerics_clusters_archetypes)<-NULL
-
-pcaFit <- PCA(X = extractNumerics_clusters_archetypes,7, ind.sup = 37:45, graph = FALSE)
-plot(pcaFit$ind$coord[,1:2], pch=".", cex=6, xlim=(c(-8,5)), ylim=c(-3,3))
-text(pcaFit$ind.sup$coord[,1:2], labels=c("A1","A2","A3","A4","A5","K1","K2","K3","K4"), col=c(rep("blue",5),rep("red",4)),cex=1)
+shared_pcaFit <- PCA(X = shared[10:ncol(shared)-1],ncol(shared)-10,scale.unit = TRUE)
+summary(shared_pcaFit)
+plot(shared_pcaFit$eig[,2],type="b", main = "Shared, screeplot", xlab = "Component", ylab="Variance explained")
