@@ -10,6 +10,7 @@ library(stringr)
 library(RColorBrewer)
 library(missMDA)
 library(FactoMineR)
+library(factoextra)
 library(readr)
 library(xtable)
 

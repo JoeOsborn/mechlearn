@@ -11,12 +11,15 @@ plot(1:15, wss, type="b", xlab="shared, number of kMeans Clusters", ylab="Within
 rm(wss)
 # K-Means Cluster Analysis
 shared_kMeansFit <- kmeans(shared[10:ncol(shared)-1], 3) # 3 cluster solution
-clusplot(shared[10:ncol(shared)-1], shared_kMeansFit$cluster, color=TRUE, shade=TRUE, labels=1, lines=0, main="Shared, kMeans clusters")
+shared_kMedioidsFit <-  pamk(shared[10:ncol(shared)-1])
+#clusplot(shared[10:ncol(shared)-1], shared_kMeansFit$cluster, color=TRUE, shade=TRUE, labels=1, lines=0, main="Shared, kMeans clusters")
+row.names(shared) <- shared$name
+fviz_cluster(shared_kMeansFit,data = shared[10:ncol(shared)-1], geom = "text", repel = TRUE)
 
 # get cluster means
 aggregate(shared[10:ncol(shared)-1],by=list(shared_kMeansFit$cluster),FUN=mean)
 
-# append cluster assignment to each player
+# append cluster assignment to each game
 shared_kMeans_cluster <- shared_kMeansFit$cluster
 table(shared_kMeans_cluster)
 shared <- data.frame(shared, shared_kMeans_cluster)

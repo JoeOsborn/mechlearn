@@ -1,3 +1,4 @@
+library(fpc)
 #----------------------------------------------
 # kMeans clustering
 #----------------------------------------------
@@ -10,8 +11,11 @@ rm(i)
 plot(1:15, wss, type="b", xlab="Full, number of kMeans Clusters", ylab="Within groups sum of squares")
 rm(wss)
 # K-Means Cluster Analysis
-full_kMeansFit <- kmeans(full[10:ncol(full)-1], 4) # 4 cluster solution
-clusplot(full[10:ncol(full)-1], full_kMeansFit$cluster, color=TRUE, shade=TRUE, labels=1, lines=0, main="Full, kMeans clusters")
+full_kMeansFit <- kmeans(full[10:ncol(full)-1], 3) # 4 cluster solution
+full_kMedioidsFit <-  pamk(full[10:ncol(full)-1])
+#clusplot(full[10:ncol(full)-1], full_kMeansFit$cluster, color=TRUE, shade=TRUE, labels = 1, lines=0, main="Full, kMeans clusters")
+row.names(full) <- full$name
+fviz_cluster(full_kMeansFit,data = full[10:ncol(full)-1], geom = "text", repel = TRUE)
 
 # get cluster means
 aggregate(full[10:ncol(full)-1],by=list(full_kMeansFit$cluster),FUN=mean)
@@ -24,7 +28,7 @@ full_kMeans_profile <- full_kMeansFit$centers
 xtable(table(full$Developer,full$full_kMeans_cluster))
 
 #----------------------------------------------
-# Archetypal analysis off games
+# Archetypal analysis of games
 #----------------------------------------------
 #Archetypes from HAs
 full_aa <- stepArchetypes(data = full[10:(ncol(full)-2)], k = 1:15, verbose = FALSE, nrep = 4)

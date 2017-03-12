@@ -11,7 +11,11 @@ plot(1:15, wss, type="b", xlab="short, number of kMeans Clusters", ylab="Within 
 rm(wss)
 # K-Means Cluster Analysis
 short_kMeansFit <- kmeans(short[10:ncol(short)-1], 3) # 3 cluster solution
-clusplot(short[10:ncol(short)-1], short_kMeansFit$cluster, color=TRUE, shade=TRUE, labels=1, lines=0, main="Short, kMeans clusters")
+short_kMedioidsFit <-  pamk(short[10:ncol(full)-1])
+#clusplot(short[10:ncol(short)-1], short_kMeansFit$cluster, color=TRUE, shade=TRUE, labels=1, lines=0, main="Short, kMeans clusters")
+row.names(short) <- short$name
+fviz_cluster(short_kMeansFit,data = short[10:ncol(short)-1], geom = "text")
+
 
 # get cluster means
 aggregate(short[10:ncol(short)-1],by=list(short_kMeansFit$cluster),FUN=mean)
