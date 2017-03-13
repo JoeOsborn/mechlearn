@@ -94,7 +94,7 @@ jump_kMeans_cluster <- jump_kMeansFit$cluster
 table(jump_kMeans_cluster)
 #jumpdata <- data.frame(jumpdata, jump_kMeans_cluster)
 jump_kMeans_profile <- jump_kMeansFit$centers
-xtable(table(extract$Developer,jumpdata$jump_kMeans_cluster))
+xtable(table(extract$Developer,jump_kMeans_cluster))
 
 #----------------------------------------------
 # Archetypal analysis of games
