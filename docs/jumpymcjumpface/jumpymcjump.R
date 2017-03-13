@@ -13,6 +13,10 @@ library(FactoMineR)
 library(factoextra)
 library(readr)
 library(xtable)
+library(ggdendro)
+library(RColorBrewer)
+library(timeline)
+library(ggrepel)
 
 #----------------------------------------------
 # Load data
@@ -38,7 +42,11 @@ jumpdata <- extract[,c("down_reset","down_mult","down_gravity","up.fixed_reset",
 temp <- extract$up.control_gravity
 temp[which(is.na(temp))] <- extract$up.fixed_gravity[which(is.na(temp))]
 jumpdata <- cbind(jumpdata,temp)
+rm(temp)
 names(jumpdata)[ncol(jumpdata)] <- "up.gravity_combined"
+controlOrNot <- as.integer(!is.na(extract$up.control_reset))
+jumpdata <- cbind(jumpdata,controlOrNot)
+rm(controlOrNot)
 rownames(jumpdata) <- extract$name
 
 #----------------------------------------------
@@ -79,11 +87,71 @@ jump_kMeansFit <- kmeans(jumpdata, 3) # 3 cluster solution
 fviz_cluster(jump_kMeansFit,data = jumpdata, geom = "text", repel = TRUE)
 
 # get cluster means
-aggregate(shared[10:ncol(shared)-1],by=list(shared_kMeansFit$cluster),FUN=mean)
+aggregate(jumpdata,by=list(jump_kMeansFit$cluster),FUN=mean)
 
 # append cluster assignment to each game
-shared_kMeans_cluster <- shared_kMeansFit$cluster
-table(shared_kMeans_cluster)
-shared <- data.frame(shared, shared_kMeans_cluster)
-shared_kMeans_profile <- shared_kMeansFit$centers
-xtable(table(shared$Developer,shared$shared_kMeans_cluster))
+jump_kMeans_cluster <- jump_kMeansFit$cluster
+table(jump_kMeans_cluster)
+#jumpdata <- data.frame(jumpdata, jump_kMeans_cluster)
+jump_kMeans_profile <- jump_kMeansFit$centers
+xtable(table(extract$Developer,jumpdata$jump_kMeans_cluster))
+
+#----------------------------------------------
+# Archetypal analysis of games
+#----------------------------------------------
+#Archetypes from HAs
+jump_aa <- stepArchetypes(data = jumpdata, k = 1:15, verbose = FALSE, nrep = 4)
+screeplot(jump_aa)
+jump_aa <- bestModel(jump_aa[[3]])
+pcplot(jump_aa, jumpdata)
+
+#Find archetype for each game
+jump_aa_cluster<-max.col(coef(jump_aa))
+#Append to dataset
+shared <- data.frame(shared,shared_aa_cluster)
+names(shared)[ncol(shared)] <- "Archetype"
+#Archetype counts
+table(extract$Publisher,jump_aa_cluster)
+#Saving archetype information for plotting
+jump_aa_profile<-parameters(jump_aa)
+
+#----------------------------------------------
+# Hierarchical clustering
+#----------------------------------------------
+jump_agnes <- agnes(x = jumpdata, metric = "euclidian", method = "ward",stand = TRUE)
+jump_agnes_dd <- as.dendrogram(jump_agnes)
+ggdendrogram(jump_agnes_dd,rotate = TRUE)
+
+#----------------------------------------------
+# Generate timeline
+#----------------------------------------------
+jumpcluster <- cbind(extract,jumpdata,jump_kMeansFit$cluster)
+names(jumpcluster)[ncol(jumpcluster)] <- "Cluster"
+
+NEStimeline <- data.frame(" ","All",as.Date("1985-01-01"),as.Date("1994-12-31"))
+names(NEStimeline) <- c("Period","Group","Start","End")
+
+minDates <- aggregate(extract$ReleaseDate.US, by = list(extract$Publisher), min)
+maxDates <- aggregate(extract$ReleaseDate.US, by = list(extract$Publisher), max)
+publisherDates <- cbind(minDates,maxDates$x)
+publisherDates <- cbind(rep(" ",nrow(publisherDates)),publisherDates)
+names(publisherDates) <- names(NEStimeline)
+#NEStimeline <- rbind(NEStimeline,publisherDates)
+jumpcluster_sorted <- jumpcluster[order(jumpcluster$ReleaseDate.US),]
+#jumpcluster_sorted <- rbind(jumpcluster_sorted[seq(1,nrow(shared_sorted), 4),],shared_sorted[seq(2,nrow(shared_sorted), 4),],shared_sorted[seq(3,nrow(shared_sorted), 4),],shared_sorted[seq(4,nrow(shared_sorted), 4),])
+timeline(df = NEStimeline, events = jumpcluster_sorted, label.col = "Period", group.col = "Group", start.col = "Start", end.col = "End", event.col = "ReleaseDate.US", event.label.col = "name", event.label.method = 2, event.line = FALSE,event.spots = 100, event.group.col = "Cluster",num.label.steps = 52,event.above = TRUE)
+
+#----------------------------------------------
+# Generate table with year and cluster members
+#----------------------------------------------
+table_yearsAndClusters <- table(jumpcluster$Year,jumpcluster$Cluster)
+yearsAndClusters <- as.data.frame(table_yearsAndClusters)
+proptable_yearsAndClusters = prop.table(table_yearsAndClusters,margin = 1)
+xtable(print(proptable_yearsAndClusters),digits = 2)
+
+#----------------------------------------------
+# Generate plot with jump clusters over years
+#----------------------------------------------
+ggplot(as.data.frame(table_yearsAndClusters), aes(x = Var1, y = Freq, group = Var2, colour = Var2)) + 
+  geom_line() + 
+  geom_point()
