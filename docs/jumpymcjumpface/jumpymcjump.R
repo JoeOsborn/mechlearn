@@ -146,12 +146,13 @@ timeline(df = NEStimeline, events = jumpcluster_sorted, label.col = "Period", gr
 #----------------------------------------------
 table_yearsAndClusters <- table(jumpcluster$Year,jumpcluster$Cluster)
 yearsAndClusters <- as.data.frame(table_yearsAndClusters)
+names(yearsAndClusters) <- c("Year","Cluster","Frequency")
 proptable_yearsAndClusters = prop.table(table_yearsAndClusters,margin = 1)
 xtable(print(proptable_yearsAndClusters),digits = 2)
 
 #----------------------------------------------
 # Generate plot with jump clusters over years
 #----------------------------------------------
-ggplot(as.data.frame(table_yearsAndClusters), aes(x = Var1, y = Freq, group = Var2, colour = Var2)) + 
+ggplot(yearsAndClusters, aes(x = Year, y = Frequency, group = Cluster, colour = Cluster)) + 
   geom_line() + 
   geom_point()
