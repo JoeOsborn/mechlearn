@@ -17,7 +17,7 @@ if __name__ == "__main__":
     ep_data = ppu_dump.ppu_output(emu,
                                   inputs[start_t:],
                                   bg_data=False,
-                                  scrolling=True,
+                                  Scrolling=True,
                                   sprite_data=False,
                                   colorized_tiles=True,
                                   display=False)

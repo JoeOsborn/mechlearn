@@ -18,6 +18,61 @@ def convert_image(img_buffer, dest):
                         cv2.COLOR_RGB2GRAY,
                         dest)
 
+# 0 - Hori
+# 1 - Vert
+# 2 - all use 0
+# 3 - all use 1
+mirror_modes = {
+    0: {
+        0: 0,
+        1: 0,
+        2: 1,
+        3: 1,
+    },
+    1: {
+        0: 0,
+        1: 1,
+        2: 0,
+        3: 1
+    },
+    2: {
+        0: 0,
+        1: 0,
+        2: 0,
+        3: 0,
+    },
+    3: {
+        0: 1,
+        1: 1,
+        2: 1,
+        3: 1
+    }
+ }
+
+
+def nt_page(nt, nti, mirroring):
+    global mirror_modes
+    start = mirror_modes[mirroring][nti] * 1024
+    base_nt = nt[start: start + 960]
+    base_attr = nt[start + 960: start + 960 + 64]
+    nt = base_nt.reshape(30, 32)
+    attr = base_attr.reshape(8, 8)
+    full_attr = np.zeros([16, 16])
+    for xx in range(8):
+        for yy in range(8):
+            val = attr[yy, xx]
+            tr = (val & 0x0c) >> 2
+            tl = val & 0x03
+            br = (val & 0xc0) >> 6
+            bl = (val & 0x30) >> 4
+            full_attr[yy * 2, xx * 2] = tl
+            full_attr[yy * 2, xx * 2 + 1] = tr
+            full_attr[yy * 2 + 1, xx * 2] = bl
+            full_attr[yy * 2 + 1, xx * 2 + 1] = br
+    full_attr = full_attr[:15, :]
+    full_attr = np.kron(full_attr, np.ones((2, 2)))
+    return nt, full_attr
+
 
 def ppu_output(emu, inputVec, **kwargs):
     start = VectorBytes()
@@ -67,12 +122,15 @@ def ppu_output(emu, inputVec, **kwargs):
         if xScrolls is not None:
             xScrolls[timestep] = emu.xScroll
 
-        # nametable scrolling stuff, worry about it later
         xScroll = emu.fc.ppu.xScroll
         yScroll = emu.fc.ppu.yScroll
+
         fineXScroll = xScroll & 0x7
         coarseXScroll = xScroll >> 3
-
+        
+        fineYScroll = yScroll & 0x7
+        coarseYScroll = yScroll >> 3
+        
         # What is scrolling?
         # There's two parts:
 
@@ -100,7 +158,7 @@ def ppu_output(emu, inputVec, **kwargs):
                 cv2.TM_CCOEFF_NORMED
             )
             minv, maxv, minloc, maxloc = cv2.minMaxLoc(result)
-            print minv, maxv, minloc, maxloc
+            # print minv, maxv, minloc, maxloc
             best_sx, best_sy = 0, 0
             cx, cy = offset_left, offset_top
             best_match = result[cy, cx]
@@ -125,7 +183,16 @@ def ppu_output(emu, inputVec, **kwargs):
             outputImage(emu, 'images/{}'.format(timestep), img_buffer)
 
         if get_bg_data:
-            nt_index = pointer_to_numpy(emu.fc.ppu.values)[0] & 0x3
+            h_neighbors = {0: 1, 1: 0, 2: 3, 3: 2}
+            v_neighbors = {0: 2, 2: 0, 1: 3, 3: 1}
+
+            base_nti = pointer_to_numpy(emu.fc.ppu.values)[0] & 0x3
+            right_nti = h_neighbors[base_nti]
+            below_nti = v_neighbors[base_nti]
+            right_below_nti = v_neighbors[right_nti]
+
+            print "NTS:\n", base_nti, right_nti, "\n", below_nti, right_below_nti
+
             # nt
             # Getting the mirroring right and grabbing the right tile seems
             # done by the PPUTile function in fceulib's ppu.cc.
@@ -133,65 +200,64 @@ def ppu_output(emu, inputVec, **kwargs):
             #  and other mapper stuff.  Because mappers are determined by mirroring!
             #  But it also relies on the global Pline to figure out which row it's in...
             #  and the `scanline` global...
-            # 
-            nt = pointer_to_numpy(emu.fc.ppu.NTARAM)
-            attr = nt[(nt_index * 1024 + 960):(nt_index * 1024 + 1024)]
-            nt = nt[(nt_index * 1024):(nt_index * 1024 + 960)]
-            print nt_index, nt.shape
-            nt = nt.reshape(30, 32)
-            attr = attr.reshape(8, 8)
-            full_attr = np.zeros([16, 16])
-            for xx in range(8):
-                for yy in range(8):
-                    val = attr[yy, xx]
-                    tr = (val & 0x0c) >> 2
-                    tl = val & 0x03
-                    br = (val & 0xc0) >> 6
-                    bl = (val & 0x30) >> 4
-                    full_attr[yy * 2, xx * 2] = tl
-                    full_attr[yy * 2, xx * 2 + 1] = tr
-                    full_attr[yy * 2 + 1, xx * 2] = bl
-                    full_attr[yy * 2 + 1, xx * 2 + 1] = br
-            full_attr = full_attr[:15, :]
-            full_attr = np.kron(full_attr, np.ones((2, 2)))
-            nametables = (nt, full_attr)
+            #
+            nta = pointer_to_numpy(emu.fc.ppu.NTARAM)
+            # change to handle other nametables?
+            mirroring = emu.fc.rom.mirroring
+            print mirroring, base_nti, coarseXScroll, coarseYScroll
+            # 0 - Hori
+            # 1 - Vert
+            # 2 - all use 0
+            # 3 - all use 1
 
-            nt_index = 1 - nt_index
-            # nt2
-            nt = pointer_to_numpy(emu.fc.ppu.NTARAM)
-            attr = nt[(nt_index * 1024 + 960):(nt_index * 1024 + 1024)]
-            nt = nt[(nt_index * 1024):(nt_index * 1024 + 960)]
-            nt = nt.reshape(30, 32)
-            attr = attr.reshape(8, 8)
-            full_attr = np.zeros([16, 16])
-            for xx in range(8):
-                for yy in range(8):
-                    val = attr[yy, xx]
-                    tr = (val & 0x0c) >> 2
-                    tl = val & 0x03
-                    br = (val & 0xc0) >> 6
-                    bl = (val & 0x30) >> 4
-                    full_attr[yy * 2, xx * 2] = tl
-                    full_attr[yy * 2, xx * 2 + 1] = tr
-                    full_attr[yy * 2 + 1, xx * 2] = bl
-                    full_attr[yy * 2 + 1, xx * 2 + 1] = br
-            full_attr = full_attr[:15, :]
-            full_attr = np.kron(full_attr, np.ones((2, 2)))
-            nametables2 = (nt, full_attr)
+            # Later, just look at VNAPages to handle roms with mappers with extra vram?
+            base_nt, base_attr = nt_page(nta, base_nti, mirroring)
+            right_nt, right_attr = nt_page(nta, right_nti, mirroring)
+            below_nt, below_attr = nt_page(nta, below_nti, mirroring)
+            right_below_nt, right_below_attr = nt_page(nta, right_below_nti, mirroring)
+            
+            base_rect = (coarseXScroll, coarseYScroll, 32-coarseXScroll, 30-coarseYScroll)
+            right_rect = (0, coarseYScroll, coarseXScroll, 30-coarseYScroll)
+            below_rect = (coarseXScroll, 0, 32-coarseXScroll, coarseYScroll)
+            right_below_rect = (0, 0, coarseXScroll, coarseYScroll)
+            print base_rect, right_rect
+            print below_rect, right_below_rect
+            print "OI"
+            actualNT = np.hstack([
+                np.vstack([
+                    base_nt[base_rect[1]:base_rect[1]+base_rect[3],
+                            base_rect[0]:base_rect[0]+base_rect[2]],
+                    below_nt[below_rect[1]:below_rect[1]+below_rect[3],
+                             below_rect[0]:below_rect[0]+below_rect[2]]
+                ]),
+                np.vstack([
+                    right_nt[right_rect[1]:right_rect[1]+right_rect[3],
+                             right_rect[0]:right_rect[0]+right_rect[2]],
+                    right_below_nt[right_below_rect[1]:right_below_rect[1]+right_below_rect[3],
+                                   right_below_rect[0]:right_below_rect[0]+right_below_rect[2]]
+                ])
+            ])
+            actualattr = np.hstack([
+                np.vstack([
+                    base_attr[base_rect[1]:base_rect[1]+base_rect[3],
+                              base_rect[0]:base_rect[0]+base_rect[2]],
+                    below_attr[below_rect[1]:below_rect[1]+below_rect[3],
+                               below_rect[0]:below_rect[0]+below_rect[2]]
+                ]),
+                np.vstack([
+                    right_attr[right_rect[1]:right_rect[1]+right_rect[3],
+                               right_rect[0]:right_rect[0]+right_rect[2]],
+                    right_below_attr[right_below_rect[1]:right_below_rect[1]+right_below_rect[3],
+                                     right_below_rect[0]:right_below_rect[0]+right_below_rect[2]]
+                ])
+            ])
+            # print actualNT.shape
+            # plt.imshow(actualNT)
+            # plt.show()
+            # print actualattr.shape
+            # plt.imshow(actualattr)
+            # plt.show()
 
-            # TODO: use yScroll also?  Handle other mirroring/wrapping modes?
-            NT = np.kron(nametables[0], np.ones((8, 8)))
-            NT2 = np.kron(nametables2[0], np.ones((8, 8)))
-            actualNT = np.zeros(NT.shape)
-            actualNT[:, :(NT.shape[1] - xScroll)] = NT[:, xScroll:]
-            actualNT[:, (NT.shape[1] - xScroll):] = NT2[:, :xScroll]
-
-            attr = np.kron(nametables[1], np.ones((8, 8)))
-            attr2 = np.kron(nametables2[1], np.ones((8, 8)))
-
-            actualattr = np.zeros(NT.shape)
-            actualattr[:, :(attr.shape[1] - xScroll)] = attr[:, xScroll:]
-            actualattr[:, (attr.shape[1] - xScroll):] = attr2[:, :xScroll]
             pairs = set()
             if get_colorized_tiles:
                 pt = pointer_to_numpy(emu.fc.ppu.PALRAM)
