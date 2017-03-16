@@ -88,6 +88,8 @@ def ppu_output(emu, inputVec, **kwargs):
     scrolled_attr_outputs = []
     xScrolls = None
     motion = {}
+    scrolls = {}
+    tm_scrolls = {}
     tm_motion = {}
 
     img_buffer = VectorBytes()
@@ -98,6 +100,7 @@ def ppu_output(emu, inputVec, **kwargs):
     scroll_area = kwargs.get("scroll_area", (0, 0, 32, 30))
     get_sprite_data = kwargs.get("sprite_data", True)
     get_scroll = kwargs.get("scrolling", True) or get_bg_data
+    
 
     if get_scroll:
         emu.imageInto(img_buffer)
@@ -146,7 +149,8 @@ def ppu_output(emu, inputVec, **kwargs):
             net_x += best_sx
             net_y += best_sy
             print "Sc1 Offset:", best_sx, best_sy, net_x, net_y
-            motion[timestep] = (net_x, net_y)
+            motion[timestep] = (best_sx, best_sy)
+            scrolls[timestep] = (net_x, net_y)
 
         if display:
             outputImage(emu, 'images/{}'.format(timestep), img_buffer)
@@ -254,9 +258,15 @@ def ppu_output(emu, inputVec, **kwargs):
             print "Sc2:", sx, sy
             #plt.imshow(np.tile(fullNTs, (2, 2))[sy:sy+scroll_area[3], sx:sx+scroll_area[2]])
             #plt.show()
-            scrolled_nt_outputs.append(np.tile(fullNTs, (2, 2))[sy:sy+scroll_area[3], sx:sx+scroll_area[2]])
-            scrolled_attr_outputs.append(np.tile(fullAttr, (2, 2))[sy:sy+scroll_area[3], sx:sx+scroll_area[2]])
-            tm_motion[timestep] = (sx,sy)
+            # TODO: test this!
+            scrolled_nt_outputs.append(fullNTs[sy:sy+scroll_area[3],
+                                               sx:sx+scroll_area[2]])
+            scrolled_attr_outputs.append(fullAttr[sy:sy+scroll_area[3],
+                                                  sx:sx+scroll_area[2]])
+            tm_scrolls[timestep] = (sx, sy)
+            px, py = tm_scrolls[timestep-1] if timestep > 0 else (sx, sy)
+            tm_motion[timestep] = ((sx-px) % 32, (sy-py) % 30)
+            print sx, sy, px, py, tm_motion[timestep]
         if get_sprite_data:
             sprite_list, colorized_sprites = get_all_sprites(emu.fc)
             for sprite_id, sprite in enumerate(sprite_list):
@@ -281,6 +291,7 @@ def ppu_output(emu, inputVec, **kwargs):
     results = {}
     if get_scroll:
         results["screen_motion"] = motion
+        results["screen_scrolls"] = scrolls
     if get_bg_data:
         results["full_nametables"] = nametable_outputs
         results["full_attrs"] = attr_outputs
@@ -288,6 +299,7 @@ def ppu_output(emu, inputVec, **kwargs):
         results["attr"] = scrolled_attr_outputs
         results["tile2colorized"] = tile2colorized
         results["tilemap_motion"] = tm_motion
+        results["tilemap_scrolls"] = tm_scrolls
     if get_sprite_data:
         results["id2colorized"] = id2colorized
         results["colorized2id"] = colorized2id
