@@ -11,12 +11,10 @@ site.addsitedir("/usr/local/lib/python2.7/site-packages")
 import cv2
 
 
-def convert_image(img_buffer, dest):
+def convert_image(img_buffer, col=cv2.COLOR_RGB2GRAY):
     # TODO: without allocations/reshape?
     screen = pointer_to_numpy(img_buffer)
-    return cv2.cvtColor(screen.reshape([256, 256, 4])[:240, :, :3].astype(np.uint8),
-                        cv2.COLOR_RGB2GRAY,
-                        dest)
+    return screen.reshape([256, 256, 4])[:240, :, :3].astype(np.uint8)
 
 # 0 - Hori
 # 1 - Vert
@@ -78,16 +76,16 @@ def ppu_output(emu, inputVec, **kwargs):
     start = VectorBytes()
     emu.save(start)
 
-    peekevery = 1
+    peekevery = 5#1
 
     colorized2id = {}
     id2colorized = {}
     tile2colorized = {}
     data = []
-    nametables = {}
-    nametables2 = {}
     nametable_outputs = []
     attr_outputs = []
+    scrolled_nt_outputs = []
+    scrolled_attr_outputs = []
     xScrolls = None
     motion = {}
 
@@ -96,72 +94,44 @@ def ppu_output(emu, inputVec, **kwargs):
     np_image_prev = np.zeros(shape=(240, 256, 1), dtype=np.uint8)
     np_image_temp = None
     get_bg_data = kwargs.get("bg_data", True)
-    get_colorized_tiles = kwargs.get("colorized_tiles", True)
+    scroll_area = kwargs.get("scroll_area", (0, 0, 32, 30))
     get_sprite_data = kwargs.get("sprite_data", True)
-    get_scroll = kwargs.get("scrolling", True)
+    get_scroll = kwargs.get("scrolling", True) or get_bg_data
 
     if get_scroll:
         emu.imageInto(img_buffer)
-        convert_image(img_buffer, np_image_prev)
+        np_image_prev = convert_image(img_buffer)
+        big_picture = np.zeros(shape=(240*2, 256*2, 3))
+
 
     display = kwargs.get("display", True)
     net_x = 0
-    # assume scrolling < K px per frame
-    scroll_window = 5
+    net_y = 0
     offset_left = 8
     offset_top = 8
-    motion = {}
     for timestep, inp in enumerate(inputVec):
         emu.stepFull(inp, 0x0)
-        if get_scroll:
+        if get_scroll or get_bg_data:
             emu.imageInto(img_buffer)
             # TODO: without allocations?
-            convert_image(img_buffer, np_image)
+            np_image = convert_image(img_buffer)
         if not (timestep % peekevery == 0):
             continue
-        if xScrolls is not None:
-            xScrolls[timestep] = emu.xScroll
-
-        xScroll = emu.fc.ppu.xScroll
-        yScroll = emu.fc.ppu.yScroll
-
-        fineXScroll = xScroll & 0x7
-        coarseXScroll = xScroll >> 3
-
-        # Seems just to duplicate xScroll??  turning off for now so at least horizontal scrolling works.
-        fineYScroll = 0 #yScroll & 0x7
-        coarseYScroll = 0 #yScroll >> 3
-
-        # What is scrolling?
-        # There's two parts:
-
-        # * visually, what is moving around on the screen?
-        # * Which parts of which nametables are visible?
-
-        # The X and Y registers are not super authoritative because if
-        # the screen is split into sections of if special effects are
-        # present, they might change arbitrarily during rendering and
-        # their values at frame end may be arbitrary.  So we have to
-        # do something visual.
-
-        # The challenge for us is to figure out, first of all, what "real" or
-        # "perceptual" scrolling is happening, and then later to figure out
-        # what parts of what nametables are visible due to that.  So we start
-        # by figuring out screen motion by looking at the emulator's
-        # framebuffer.
 
         if get_scroll and timestep > 0:
             # TODO: maybe instead consider a span of columns on the left and middle and right and a span of rows on the top and middle and bottom, and see which of those are moving in what direction, and take the biggest/average scroll?
             result = cv2.matchTemplate(
-                np_image,
-                np_image_prev[offset_top:240 - offset_top * 2,
-                              offset_left:256 - offset_left * 2],
+                np_image[scroll_area[1]*8+offset_top:scroll_area[1]*8+scroll_area[3]*8-offset_top*2,
+                         scroll_area[0]*8+offset_left:scroll_area[0]*8+scroll_area[2]*8-offset_left*2],
+                np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
+                         scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8],
                 cv2.TM_CCOEFF_NORMED
             )
             minv, maxv, minloc, maxloc = cv2.minMaxLoc(result)
-            # print minv, maxv, minloc, maxloc
+            print "Match1", minv, maxv, minloc, maxloc
             best_sx, best_sy = 0, 0
             cx, cy = offset_left, offset_top
+            scroll_window = 5
             best_match = result[cy, cx]
             # Look around the center of the image.  does it get better-matched
             # going to the left, right, up, or down?
@@ -172,13 +142,10 @@ def ppu_output(emu, inputVec, **kwargs):
                         best_sx = sx
                         best_sy = sy
                         best_match = match
-
             net_x -= best_sx
-            print "Offset:", best_sx, best_sy, net_x
-            motion[timestep] = (-best_sx, -best_sy)
-            np_image_temp = np_image
-            np_image = np_image_prev
-            np_image_prev = np_image_temp
+            net_y -= best_sy
+            print "Sc1 Offset:", best_sx, best_sy, net_x, net_y
+            motion[timestep] = (-cx, -cy)
 
         if display:
             outputImage(emu, 'images/{}'.format(timestep), img_buffer)
@@ -204,8 +171,8 @@ def ppu_output(emu, inputVec, **kwargs):
             #
             nta = pointer_to_numpy(emu.fc.ppu.NTARAM)
             # change to handle other nametables?
-            mirroring = emu.fc.rom.mirroring
-            print mirroring, base_nti, coarseXScroll, coarseYScroll, fineXScroll, fineYScroll
+            mirroring = emu.fc.cart.mirroring
+            print "M", mirroring, "base", base_nti
             # 0 - Hori
             # 1 - Vert
             # 2 - all use 0
@@ -217,65 +184,78 @@ def ppu_output(emu, inputVec, **kwargs):
             below_nt, below_attr = nt_page(nta, below_nti, mirroring)
             right_below_nt, right_below_attr = nt_page(nta, right_below_nti, mirroring)
             
-            base_rect = (coarseXScroll, coarseYScroll, 32-coarseXScroll, 30-coarseYScroll)
-            right_rect = (0, coarseYScroll, coarseXScroll, 30-coarseYScroll)
-            below_rect = (coarseXScroll, 0, 32-coarseXScroll, coarseYScroll)
-            right_below_rect = (0, 0, coarseXScroll, coarseYScroll)
-            print base_rect, right_rect
-            print below_rect, right_below_rect
-            print "OI"
             fullNTs = np.vstack([
                 np.hstack([
                     base_nt,
-                    below_nt
+                    right_nt
                 ]),
                 np.hstack([
-                    right_nt,
+                    below_nt,
                     right_below_nt
                 ])
             ])
             fullAttr = np.vstack([
                 np.hstack([
                     base_attr,
-                    below_attr
+                    right_attr
                 ]),
                 np.hstack([
-                    right_attr,
+                    below_attr,
                     right_below_attr
                 ])
             ])
-
-            plt.imshow(fullNTs)
-            plt.show()
-
-            actualNT = fullNTs[coarseYScroll:coarseYScroll+30, coarseXScroll:coarseXScroll+32]
-            actualattr = fullAttr[coarseYScroll:coarseYScroll+30, coarseXScroll:coarseXScroll+32]
-            
-            # print actualNT.shape
-            # plt.imshow(actualNT)
-            # plt.show()
-            # print actualattr.shape
-            # plt.imshow(actualattr)
-            # plt.show()
+                        
+            nametable_outputs.append(fullNTs)
+            attr_outputs.append(fullAttr)
 
             pairs = set()
-            if get_colorized_tiles:
-                pt = pointer_to_numpy(emu.fc.ppu.PALRAM)
-                for ii in range(actualattr.shape[0]):
-                    for jj in range(actualattr.shape[1]):
-                        pairs.add((int(actualNT[ii, jj]),
-                                   int(actualattr[ii, jj])))
-                for pair in pairs:
-                    if pair not in tile2colorized:
-                        tile2colorized[pair] = colorize_tile(
-                            get_tile(pair[0], emu.fc),
-                            pair[1],
-                            pt)[:, :, :3]
-                        # Have to divide by 255 to actually
-                        # display with plt.imshow
-            nametable_outputs.append(actualNT)
-            attr_outputs.append(actualattr)
+            pt = pointer_to_numpy(emu.fc.ppu.PALRAM)
+            for ii in range(fullAttr.shape[0]):
+                for jj in range(fullAttr.shape[1]):
+                    pairs.add((int(fullNTs[ii, jj]),
+                               int(fullAttr[ii, jj])))
+            for pair in pairs:
+                if pair not in tile2colorized:
+                    tile2colorized[pair] = colorize_tile(
+                        get_tile(pair[0], emu.fc),
+                        pair[1],
+                        pt)[:, :, :3]
+                    # Have to divide by 255 to actually
+                    # display with plt.imshow
 
+            # OK, let's figure out our scrolling situation.
+            # First build a mighty template image out of the whole picture.
+            # We're gonna template match to see how the baby real image fits inside
+            # the big full screen image.
+            # We can't really use the scroll info determined earlier, because we don't know
+            # the x and y scroll as of initialization time
+            for ii in range(fullAttr.shape[0]):
+                for jj in range(fullAttr.shape[1]):
+                    pair = (int(fullNTs[ii, jj]),
+                            int(fullAttr[ii, jj]))
+                    big_picture[ii*8:ii*8+8, jj*8:jj*8+8, :] = tile2colorized[pair]/255.0
+
+            #plt.imshow(big_picture)
+            #plt.show()
+            #plt.imshow(np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
+            #                    scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8])
+            #plt.show()
+
+            insets = cv2.matchTemplate(
+                big_picture.astype(np.uint8),
+                np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
+                         scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8],
+                cv2.TM_CCOEFF_NORMED
+            )
+            minv, maxv, minloc, maxloc = cv2.minMaxLoc(insets)
+            sx = maxloc[0]/8
+            sy = maxloc[1]/8
+            print "Sc2:", sx, sy
+            #plt.imshow(np.tile(fullNTs, (2, 2))[sy:sy+scroll_area[3], sx:sx+scroll_area[2]])
+            #plt.show()
+            scrolled_nt_outputs.append(np.tile(fullNTs, (2, 2))[sy:sy+scroll_area[3], sx:sx+scroll_area[2]])
+            scrolled_attr_outputs.append(np.tile(fullAttr, (2, 2))[sy:sy+scroll_area[3], sx:sx+scroll_area[2]])
+            
         if get_sprite_data:
             sprite_list, colorized_sprites = get_all_sprites(emu.fc)
             for sprite_id, sprite in enumerate(sprite_list):
@@ -292,16 +272,20 @@ def ppu_output(emu, inputVec, **kwargs):
                     ] = colorized_sprites[sprite_id]
                 # print timestep,  colorized2id[uniq], sprite[:2]
                 data.append((timestep, colorized2id[uniq], sprite))
+        np_image_temp = np_image
+        np_image = np_image_prev
+        np_image_prev = np_image_temp
 
     emu.load(start)
     results = {}
     if get_scroll:
         results["screen_motion"] = motion
     if get_bg_data:
-        results["nametables"] = nametable_outputs
-        results["attrs"] = attr_outputs
-        if get_colorized_tiles:
-            results["tile2colorized"] = tile2colorized
+        results["full_nametables"] = nametable_outputs
+        results["full_attrs"] = attr_outputs
+        results["nametables"] = scrolled_nt_outputs
+        results["attr"] = scrolled_attr_outputs
+        results["tile2colorized"] = tile2colorized
     if get_sprite_data:
         results["id2colorized"] = id2colorized
         results["colorized2id"] = colorized2id
