@@ -147,6 +147,58 @@ def ppu_output(emu, inputVec, **kwargs):
             print "Sc1 Offset:", best_sx, best_sy, net_x, net_y
             motion[timestep] = (-cx, -cy)
 
+        # Seems just to duplicate xScroll??  turning off for now so at least horizontal scrolling works.
+        fineYScroll = 0 #yScroll & 0x7
+        coarseYScroll = 0 #yScroll >> 3
+
+        # What is scrolling?
+        # There's two parts:
+
+        # * visually, what is moving around on the screen?
+        # * Which parts of which nametables are visible?
+
+        # The X and Y registers are not super authoritative because if
+        # the screen is split into sections of if special effects are
+        # present, they might change arbitrarily during rendering and
+        # their values at frame end may be arbitrary.  So we have to
+        # do something visual.
+
+        # The challenge for us is to figure out, first of all, what "real" or
+        # "perceptual" scrolling is happening, and then later to figure out
+        # what parts of what nametables are visible due to that.  So we start
+        # by figuring out screen motion by looking at the emulator's
+        # framebuffer.
+
+        if get_scroll and timestep > 0:
+            # TODO: maybe instead consider a span of columns on the left and middle and right and a span of rows on the top and middle and bottom, and see which of those are moving in what direction, and take the biggest/average scroll?
+            result = cv2.matchTemplate(
+                np_image,
+                np_image_prev[offset_top:240 - offset_top * 2,
+                              offset_left:256 - offset_left * 2],
+                cv2.TM_CCOEFF_NORMED
+            )
+            minv, maxv, minloc, maxloc = cv2.minMaxLoc(result)
+            # print minv, maxv, minloc, maxloc
+            best_sx, best_sy = 0, 0
+            cx, cy = offset_left, offset_top
+            best_match = result[cy, cx]
+            # Look around the center of the image.  does it get better-matched
+            # going to the left, right, up, or down?
+            for sx in range(-scroll_window, scroll_window):
+                for sy in range(-scroll_window, scroll_window):
+                    match = result[cy + sy, cx + sx]
+                    if match > best_match:
+                        best_sx = sx
+                        best_sy = sy
+                        best_match = match
+
+            net_x -= best_sx
+            print "Offset:", best_sx, best_sy, net_x
+            motion[timestep] = (-best_sx, -best_sy)
+            np_image_temp = np_image
+            np_image = np_image_prev
+            np_image_prev = np_image_temp
+
         if display:
             outputImage(emu, 'images/{}'.format(timestep), img_buffer)
 
