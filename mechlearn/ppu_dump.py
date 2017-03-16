@@ -127,10 +127,11 @@ def ppu_output(emu, inputVec, **kwargs):
 
         fineXScroll = xScroll & 0x7
         coarseXScroll = xScroll >> 3
-        
-        fineYScroll = yScroll & 0x7
-        coarseYScroll = yScroll >> 3
-        
+
+        # Seems just to duplicate xScroll??  turning off for now so at least horizontal scrolling works.
+        fineYScroll = 0 #yScroll & 0x7
+        coarseYScroll = 0 #yScroll >> 3
+
         # What is scrolling?
         # There's two parts:
 
@@ -204,7 +205,7 @@ def ppu_output(emu, inputVec, **kwargs):
             nta = pointer_to_numpy(emu.fc.ppu.NTARAM)
             # change to handle other nametables?
             mirroring = emu.fc.rom.mirroring
-            print mirroring, base_nti, coarseXScroll, coarseYScroll
+            print mirroring, base_nti, coarseXScroll, coarseYScroll, fineXScroll, fineYScroll
             # 0 - Hori
             # 1 - Vert
             # 2 - all use 0
@@ -223,34 +224,33 @@ def ppu_output(emu, inputVec, **kwargs):
             print base_rect, right_rect
             print below_rect, right_below_rect
             print "OI"
-            actualNT = np.hstack([
-                np.vstack([
-                    base_nt[base_rect[1]:base_rect[1]+base_rect[3],
-                            base_rect[0]:base_rect[0]+base_rect[2]],
-                    below_nt[below_rect[1]:below_rect[1]+below_rect[3],
-                             below_rect[0]:below_rect[0]+below_rect[2]]
+            fullNTs = np.vstack([
+                np.hstack([
+                    base_nt,
+                    below_nt
                 ]),
-                np.vstack([
-                    right_nt[right_rect[1]:right_rect[1]+right_rect[3],
-                             right_rect[0]:right_rect[0]+right_rect[2]],
-                    right_below_nt[right_below_rect[1]:right_below_rect[1]+right_below_rect[3],
-                                   right_below_rect[0]:right_below_rect[0]+right_below_rect[2]]
+                np.hstack([
+                    right_nt,
+                    right_below_nt
                 ])
             ])
-            actualattr = np.hstack([
-                np.vstack([
-                    base_attr[base_rect[1]:base_rect[1]+base_rect[3],
-                              base_rect[0]:base_rect[0]+base_rect[2]],
-                    below_attr[below_rect[1]:below_rect[1]+below_rect[3],
-                               below_rect[0]:below_rect[0]+below_rect[2]]
+            fullAttr = np.vstack([
+                np.hstack([
+                    base_attr,
+                    below_attr
                 ]),
-                np.vstack([
-                    right_attr[right_rect[1]:right_rect[1]+right_rect[3],
-                               right_rect[0]:right_rect[0]+right_rect[2]],
-                    right_below_attr[right_below_rect[1]:right_below_rect[1]+right_below_rect[3],
-                                     right_below_rect[0]:right_below_rect[0]+right_below_rect[2]]
+                np.hstack([
+                    right_attr,
+                    right_below_attr
                 ])
             ])
+
+            plt.imshow(fullNTs)
+            plt.show()
+
+            actualNT = fullNTs[coarseYScroll:coarseYScroll+30, coarseXScroll:coarseXScroll+32]
+            actualattr = fullAttr[coarseYScroll:coarseYScroll+30, coarseXScroll:coarseXScroll+32]
+            
             # print actualNT.shape
             # plt.imshow(actualNT)
             # plt.show()
