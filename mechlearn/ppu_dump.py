@@ -76,7 +76,7 @@ def ppu_output(emu, inputVec, **kwargs):
     start = VectorBytes()
     emu.save(start)
 
-    peekevery = 5#1
+    peekevery = 1
 
     colorized2id = {}
     id2colorized = {}
@@ -88,6 +88,7 @@ def ppu_output(emu, inputVec, **kwargs):
     scrolled_attr_outputs = []
     xScrolls = None
     motion = {}
+    tm_motion = {}
 
     img_buffer = VectorBytes()
     np_image = np.zeros(shape=(240, 256, 1), dtype=np.uint8)
@@ -121,10 +122,10 @@ def ppu_output(emu, inputVec, **kwargs):
         if get_scroll and timestep > 0:
             # TODO: maybe instead consider a span of columns on the left and middle and right and a span of rows on the top and middle and bottom, and see which of those are moving in what direction, and take the biggest/average scroll?
             result = cv2.matchTemplate(
+                np_image_prev[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
+                              scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8],
                 np_image[scroll_area[1]*8+offset_top:scroll_area[1]*8+scroll_area[3]*8-offset_top*2,
                          scroll_area[0]*8+offset_left:scroll_area[0]*8+scroll_area[2]*8-offset_left*2],
-                np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
-                         scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8],
                 cv2.TM_CCOEFF_NORMED
             )
             minv, maxv, minloc, maxloc = cv2.minMaxLoc(result)
@@ -142,62 +143,10 @@ def ppu_output(emu, inputVec, **kwargs):
                         best_sx = sx
                         best_sy = sy
                         best_match = match
-            net_x -= best_sx
-            net_y -= best_sy
+            net_x += best_sx
+            net_y += best_sy
             print "Sc1 Offset:", best_sx, best_sy, net_x, net_y
-            motion[timestep] = (-cx, -cy)
-
-        # Seems just to duplicate xScroll??  turning off for now so at least horizontal scrolling works.
-        fineYScroll = 0 #yScroll & 0x7
-        coarseYScroll = 0 #yScroll >> 3
-
-        # What is scrolling?
-        # There's two parts:
-
-        # * visually, what is moving around on the screen?
-        # * Which parts of which nametables are visible?
-
-        # The X and Y registers are not super authoritative because if
-        # the screen is split into sections of if special effects are
-        # present, they might change arbitrarily during rendering and
-        # their values at frame end may be arbitrary.  So we have to
-        # do something visual.
-
-        # The challenge for us is to figure out, first of all, what "real" or
-        # "perceptual" scrolling is happening, and then later to figure out
-        # what parts of what nametables are visible due to that.  So we start
-        # by figuring out screen motion by looking at the emulator's
-        # framebuffer.
-
-        if get_scroll and timestep > 0:
-            # TODO: maybe instead consider a span of columns on the left and middle and right and a span of rows on the top and middle and bottom, and see which of those are moving in what direction, and take the biggest/average scroll?
-            result = cv2.matchTemplate(
-                np_image,
-                np_image_prev[offset_top:240 - offset_top * 2,
-                              offset_left:256 - offset_left * 2],
-                cv2.TM_CCOEFF_NORMED
-            )
-            minv, maxv, minloc, maxloc = cv2.minMaxLoc(result)
-            # print minv, maxv, minloc, maxloc
-            best_sx, best_sy = 0, 0
-            cx, cy = offset_left, offset_top
-            best_match = result[cy, cx]
-            # Look around the center of the image.  does it get better-matched
-            # going to the left, right, up, or down?
-            for sx in range(-scroll_window, scroll_window):
-                for sy in range(-scroll_window, scroll_window):
-                    match = result[cy + sy, cx + sx]
-                    if match > best_match:
-                        best_sx = sx
-                        best_sy = sy
-                        best_match = match
-
-            net_x -= best_sx
-            print "Offset:", best_sx, best_sy, net_x
-            motion[timestep] = (-best_sx, -best_sy)
-            np_image_temp = np_image
-            np_image = np_image_prev
-            np_image_prev = np_image_temp
+            motion[timestep] = (net_x, net_y)
 
         if display:
             outputImage(emu, 'images/{}'.format(timestep), img_buffer)
@@ -307,7 +256,7 @@ def ppu_output(emu, inputVec, **kwargs):
             #plt.show()
             scrolled_nt_outputs.append(np.tile(fullNTs, (2, 2))[sy:sy+scroll_area[3], sx:sx+scroll_area[2]])
             scrolled_attr_outputs.append(np.tile(fullAttr, (2, 2))[sy:sy+scroll_area[3], sx:sx+scroll_area[2]])
-            
+            tm_motion[timestep] = (sx,sy)
         if get_sprite_data:
             sprite_list, colorized_sprites = get_all_sprites(emu.fc)
             for sprite_id, sprite in enumerate(sprite_list):
@@ -338,6 +287,7 @@ def ppu_output(emu, inputVec, **kwargs):
         results["nametables"] = scrolled_nt_outputs
         results["attr"] = scrolled_attr_outputs
         results["tile2colorized"] = tile2colorized
+        results["tilemap_motion"] = tm_motion
     if get_sprite_data:
         results["id2colorized"] = id2colorized
         results["colorized2id"] = colorized2id
