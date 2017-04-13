@@ -240,11 +240,13 @@ def ppu_output(emu, inputVec, **kwargs):
                             int(fullAttr[ii, jj]))
                     big_picture[ii*8:ii*8+8, jj*8:jj*8+8, :] = tile2colorized[pair]/255.0
 
-            #plt.imshow(big_picture)
-            #plt.show()
-            #plt.imshow(np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
-            #                    scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8])
-            #plt.show()
+            if timestep % 60 == 0:
+                print "T:",timestep
+                plt.imshow(big_picture)
+                plt.show()
+                plt.imshow(np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
+                                    scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8])
+                plt.show()
 
             insets = cv2.matchTemplate(
                 big_picture.astype(np.uint8),
@@ -265,7 +267,16 @@ def ppu_output(emu, inputVec, **kwargs):
                                                   sx:sx+scroll_area[2]])
             tm_scrolls[timestep] = (sx, sy)
             px, py = tm_scrolls[timestep-1] if timestep > 0 else (sx, sy)
-            tm_motion[timestep] = ((sx-px) % 32, (sy-py) % 30)
+            mx, my = (sx-px, sy-py)
+            if mx >= 16:
+                mx -= 32
+            if mx <= -16:
+                mx += 32
+            if my >= 15:
+                my -= 30
+            if my <= -15:
+                my += 30
+            tm_motion[timestep] = (mx, my)
             print sx, sy, px, py, tm_motion[timestep]
         if get_sprite_data:
             sprite_list, colorized_sprites = get_all_sprites(emu.fc)
