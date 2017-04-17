@@ -100,6 +100,7 @@ def ppu_output(emu, inputVec, **kwargs):
     scroll_area = kwargs.get("scroll_area", (0, 0, 32, 30))
     get_sprite_data = kwargs.get("sprite_data", True)
     get_scroll = kwargs.get("scrolling", True) or get_bg_data
+    test_control = kwargs.get("test_control", False) 
     
 
     if get_scroll:
@@ -107,15 +108,47 @@ def ppu_output(emu, inputVec, **kwargs):
         np_image_prev = convert_image(img_buffer)
         big_picture = np.zeros(shape=(240*2, 256*2, 3))
 
-
+    if test_control:
+        
+        start_state = fceulib.VectorBytes()
     display = kwargs.get("display", True)
     net_x = 0
     net_y = 0
     offset_left = 8
     offset_top = 8
+
+
+    has_controls = {}
     for timestep, inp in enumerate(inputVec):
+        if test_control:
+            images = []
+            emu.save(start_state)
+            emu.stepFull(inp, 0x0)
+            next = timestep + 1
+            if next >= len(inputVec):
+                next = len(inputVec)-1
+            emu.stepFull(inputVec[next],0x0)            
+            emu.imageInto(img_buffer)
+            np_image = convert_image(img_buffer)           
+            
+            has_control = False
+            for test_inp in [0,1,4,5,6,7]:
+                emu.load(start_state)                
+                emu.stepFull(1 << test_inp,0x0)
+                emu.stepFull(inputVec[next],0x0)   
+                emu.imageInto(img_buffer)
+                image = convert_image(img_buffer)
+                
+                if np.sum(np.abs(image - np_image)) > 0:
+                    has_control = True
+                    break
+            
+            has_controls[timestep] = has_control
+            emu.load(start_state)            
+        
         emu.stepFull(inp, 0x0)
-        if get_scroll or get_bg_data:
+        
+        if get_scroll or get_bg_data or test_control:
             emu.imageInto(img_buffer)
             # TODO: without allocations?
             np_image = convert_image(img_buffer)
@@ -315,4 +348,6 @@ def ppu_output(emu, inputVec, **kwargs):
         results["id2colorized"] = id2colorized
         results["colorized2id"] = colorized2id
         results["sprite_data"] = data
+    if test_control:
+        results['has_controls'] = has_controls
     return results
