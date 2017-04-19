@@ -120,6 +120,10 @@ def ppu_output(emu, inputVec, **kwargs):
 
     has_controls = {}
     for timestep, inp in enumerate(inputVec):
+
+        if not (timestep % peekevery == 0):
+            continue
+        
         if test_control:
             images = []
             emu.save(start_state)
@@ -152,8 +156,6 @@ def ppu_output(emu, inputVec, **kwargs):
             emu.imageInto(img_buffer)
             # TODO: without allocations?
             np_image = convert_image(img_buffer)
-        if not (timestep % peekevery == 0):
-            continue
 
         if get_scroll and timestep > 0:
             # TODO: maybe instead consider a span of columns on the left and middle and right and a span of rows on the top and middle and bottom, and see which of those are moving in what direction, and take the biggest/average scroll?
