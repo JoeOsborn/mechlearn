@@ -92,7 +92,7 @@ def ppu_output(emu, inputVec, **kwargs):
     scrolls = {}
     tm_scrolls = {}
     tm_motion = {}
-
+    palettes = []
     img_buffer = VectorBytes()
     np_image = np.zeros(shape=(240, 256, 1), dtype=np.uint8)
     np_image_prev = np.zeros(shape=(240, 256, 1), dtype=np.uint8)
@@ -127,10 +127,13 @@ def ppu_output(emu, inputVec, **kwargs):
             images = []
             emu.save(start_state)
             emu.stepFull(inp, 0x0)
-            next = timestep + 1
-            if next >= len(inputVec):
-                next = len(inputVec) - 1
-            emu.stepFull(inputVec[next], 0x0)
+            steps = 3
+            next = timestep
+            for ii in range(steps):
+                next = next + 1
+                if next >= len(inputVec):
+                    next = len(inputVec) - 1
+                emu.stepFull(inputVec[next], 0x0)
             emu.imageInto(img_buffer)
             np_image = convert_image(img_buffer)
 
@@ -138,7 +141,8 @@ def ppu_output(emu, inputVec, **kwargs):
             for test_inp in [0, 1, 4, 5, 6, 7]:
                 emu.load(start_state)
                 emu.stepFull(1 << test_inp, 0x0)
-                emu.stepFull(inputVec[next], 0x0)
+                for ii in range(steps):
+                    emu.stepFull(1 << test_inp, 0x0)
                 emu.imageInto(img_buffer)
                 image = convert_image(img_buffer)
 
@@ -254,10 +258,12 @@ def ppu_output(emu, inputVec, **kwargs):
 
             pairs = set()
             pt = pointer_to_numpy(emu.fc.ppu.PALRAM)
+            pt_id = tuple(pt.ravel())
+            palettes.append(pt_id)
             for ii in range(fullAttr.shape[0]):
                 for jj in range(fullAttr.shape[1]):
                     pairs.add((int(fullNTs[ii, jj]),
-                               int(fullAttr[ii, jj])))
+                               int(fullAttr[ii, jj]), pt_id))
             for pair in pairs:
                 if pair not in tile2colorized:
                     tile2colorized[pair] = colorize_tile(
@@ -276,7 +282,7 @@ def ppu_output(emu, inputVec, **kwargs):
             for ii in range(fullAttr.shape[0]):
                 for jj in range(fullAttr.shape[1]):
                     pair = (int(fullNTs[ii, jj]),
-                            int(fullAttr[ii, jj]))
+                            int(fullAttr[ii, jj]), pt_id)
                     big_picture[ii * 8:ii * 8 + 8, jj * 8:jj *
                                 8 + 8, :] = tile2colorized[pair] / 255.0
 
@@ -346,6 +352,7 @@ def ppu_output(emu, inputVec, **kwargs):
     if get_bg_data:
         results["full_nametables"] = nametable_outputs
         results["full_attrs"] = attr_outputs
+        results["palettes"] = palettes
         results["nametables"] = scrolled_nt_outputs
         results["attr"] = scrolled_attr_outputs
         results["tile2colorized"] = tile2colorized
