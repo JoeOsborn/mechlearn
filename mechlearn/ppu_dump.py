@@ -281,24 +281,39 @@ def ppu_output(emu, inputVec, **kwargs):
                             int(fullAttr[ii, jj]),pt_id)
                     big_picture[ii*8:ii*8+8, jj*8:jj*8+8, :] = tile2colorized[pair]/255.0
 
-            if timestep % 60 == 0:
-                print "T:",timestep
-                plt.imshow(big_picture)
-                plt.show()
-                plt.imshow(np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
-                                    scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8])
-                plt.show()
+            center = False
+            if center:
+                insets = cv2.matchTemplate(
 
-            insets = cv2.matchTemplate(
-                big_picture.astype(np.uint8),
-                np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
-                         scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8],
-                cv2.TM_CCOEFF_NORMED
-            )
+                    cv2.cvtColor((big_picture*128+128).astype(np.uint8), cv2.COLOR_BGR2GRAY),
+                    cv2.cvtColor((np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
+                                       scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8]/2+0.5).astype(np.uint8), cv2.COLOR_BGR2GRAY),
+                    cv2.TM_CCOEFF_NORMED
+                )
+            else:
+                insets = cv2.matchTemplate(
+                
+                    cv2.cvtColor((big_picture*256).astype(np.uint8), cv2.COLOR_BGR2GRAY),
+                    cv2.cvtColor((np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
+                                       scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8]).astype(np.uint8), cv2.COLOR_BGR2GRAY),
+                    cv2.TM_CCOEFF_NORMED
+                )
             minv, maxv, minloc, maxloc = cv2.minMaxLoc(insets)
             sx = maxloc[0]/8
             sy = maxloc[1]/8
             print "Sc2:", sx, sy
+            if timestep % 60 == 0:
+                print "T:",timestep
+                plt.imshow(insets)
+                plt.show()
+                plt.imshow(cv2.cvtColor((big_picture*128+128).astype(np.uint8), cv2.COLOR_BGR2GRAY))
+                plt.plot((sx*8,(sx+scroll_area[2])*8,(sx+scroll_area[2])*8,sx*8,sx*8),
+                         (sy*8,sy*8,(sy+scroll_area[3])*8,(sy+scroll_area[3])*8,sy*8),'r')
+                plt.show()
+                
+                plt.imshow(np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
+                                    scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8])
+                plt.show()
             #plt.imshow(np.tile(fullNTs, (2, 2))[sy:sy+scroll_area[3], sx:sx+scroll_area[2]])
             #plt.show()
             # TODO: test this!
