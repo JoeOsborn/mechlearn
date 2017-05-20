@@ -16,6 +16,7 @@ def convert_image(img_buffer, col=cv2.COLOR_RGB2GRAY):
     screen = pointer_to_numpy(img_buffer)
     return screen.reshape([256, 256, 4])[:240, :, :3].astype(np.uint8)
 
+
 # 0 - Hori
 # 1 - Vert
 # 2 - all use 0
@@ -45,7 +46,7 @@ mirror_modes = {
         2: 1,
         3: 1
     }
- }
+}
 
 
 def nt_page(nt, nti, mirroring):
@@ -102,15 +103,14 @@ def ppu_output(emu, inputVec, **kwargs):
     get_scroll = kwargs.get("scrolling", True) or get_bg_data
     test_control = kwargs.get("test_control", False) 
     inputs2 = kwargs.get("inputs2", [0]*len(inputVec))
-    
 
     if get_scroll:
         emu.imageInto(img_buffer)
         np_image_prev = convert_image(img_buffer)
-        big_picture = np.zeros(shape=(240*2, 256*2, 3))
+        big_picture = np.zeros(shape=(240 * 2, 256 * 2, 3))
 
     if test_control:
-        
+
         start_state = fceulib.VectorBytes()
     display = kwargs.get("display", True)
     net_x = 0
@@ -118,13 +118,12 @@ def ppu_output(emu, inputVec, **kwargs):
     offset_left = 8
     offset_top = 8
 
-
     has_controls = {}
     for timestep, (inp,inp2) in enumerate(zip(inputVec,inputs2)):
 
         if not (timestep % peekevery == 0):
             continue
-        
+
         if test_control:
             images = []
             emu.save(start_state)
@@ -137,38 +136,42 @@ def ppu_output(emu, inputVec, **kwargs):
                     next = len(inputVec)-1
                 emu.stepFull(inputVec[next],inp2)            
             emu.imageInto(img_buffer)
-            np_image = convert_image(img_buffer)           
-            
+            np_image = convert_image(img_buffer)
+
             has_control = False
-            for test_inp in [0,1,4,5,6,7]:
-                emu.load(start_state)                
-                emu.stepFull(1 << test_inp,0x0)
+            for test_inp in [0, 1, 4, 5, 6, 7]:
+                emu.load(start_state)
+                emu.stepFull(1 << test_inp, 0x0)
                 for ii in range(steps):
-                    emu.stepFull(1 << test_inp,0x0)   
+                    emu.stepFull(1 << test_inp, 0x0)
                 emu.imageInto(img_buffer)
                 image = convert_image(img_buffer)
-                
+
                 if np.sum(np.abs(image - np_image)) > 0:
                     has_control = True
                     break
-            
+
             has_controls[timestep] = has_control
             emu.load(start_state)            
         
         emu.stepFull(inp, inp2)
         
+
         if get_scroll or get_bg_data or test_control:
             emu.imageInto(img_buffer)
             # TODO: without allocations?
             np_image = convert_image(img_buffer)
 
         if get_scroll and timestep > 0:
-            # TODO: maybe instead consider a span of columns on the left and middle and right and a span of rows on the top and middle and bottom, and see which of those are moving in what direction, and take the biggest/average scroll?
+            # TODO: maybe instead consider a span of columns on the left and
+            # middle and right and a span of rows on the top and middle and
+            # bottom, and see which of those are moving in what direction, and
+            # take the biggest/average scroll?
             result = cv2.matchTemplate(
-                np_image_prev[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
-                              scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8],
-                np_image[scroll_area[1]*8+offset_top:scroll_area[1]*8+scroll_area[3]*8-offset_top*2,
-                         scroll_area[0]*8+offset_left:scroll_area[0]*8+scroll_area[2]*8-offset_left*2],
+                np_image_prev[scroll_area[1] * 8:(scroll_area[1] + scroll_area[3]) * 8,
+                              scroll_area[0] * 8:(scroll_area[0] + scroll_area[2]) * 8],
+                np_image[scroll_area[1] * 8 + offset_top:scroll_area[1] * 8 + scroll_area[3] * 8 - offset_top * 2,
+                         scroll_area[0] * 8 + offset_left:scroll_area[0] * 8 + scroll_area[2] * 8 - offset_left * 2],
                 cv2.TM_CCOEFF_NORMED
             )
             minv, maxv, minloc, maxloc = cv2.minMaxLoc(result)
@@ -223,12 +226,14 @@ def ppu_output(emu, inputVec, **kwargs):
             # 2 - all use 0
             # 3 - all use 1
 
-            # Later, just look at VNAPages to handle roms with mappers with extra vram?
+            # Later, just look at VNAPages to handle roms with mappers with
+            # extra vram?
             base_nt, base_attr = nt_page(nta, base_nti, mirroring)
             right_nt, right_attr = nt_page(nta, right_nti, mirroring)
             below_nt, below_attr = nt_page(nta, below_nti, mirroring)
-            right_below_nt, right_below_attr = nt_page(nta, right_below_nti, mirroring)
-            
+            right_below_nt, right_below_attr = nt_page(
+                nta, right_below_nti, mirroring)
+
             fullNTs = np.vstack([
                 np.hstack([
                     base_nt,
@@ -249,7 +254,7 @@ def ppu_output(emu, inputVec, **kwargs):
                     right_below_attr
                 ])
             ])
-                        
+
             nametable_outputs.append(fullNTs)
             attr_outputs.append(fullAttr)
 
@@ -260,7 +265,7 @@ def ppu_output(emu, inputVec, **kwargs):
             for ii in range(fullAttr.shape[0]):
                 for jj in range(fullAttr.shape[1]):
                     pairs.add((int(fullNTs[ii, jj]),
-                               int(fullAttr[ii, jj]),pt_id))
+                               int(fullAttr[ii, jj]), pt_id))
             for pair in pairs:
                 if pair not in tile2colorized:
                     tile2colorized[pair] = colorize_tile(
@@ -279,8 +284,9 @@ def ppu_output(emu, inputVec, **kwargs):
             for ii in range(fullAttr.shape[0]):
                 for jj in range(fullAttr.shape[1]):
                     pair = (int(fullNTs[ii, jj]),
-                            int(fullAttr[ii, jj]),pt_id)
-                    big_picture[ii*8:ii*8+8, jj*8:jj*8+8, :] = tile2colorized[pair]/255.0
+                            int(fullAttr[ii, jj]), pt_id)
+                    big_picture[ii * 8:ii * 8 + 8, jj * 8:jj *
+                                8 + 8, :] = tile2colorized[pair] / 255.0
 
             center = True
             if center:
@@ -312,19 +318,19 @@ def ppu_output(emu, inputVec, **kwargs):
                 plt.imshow(cv2.cvtColor(( np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
                                                    scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8]/2+128).astype(np.uint8), cv2.COLOR_BGR2GRAY))
                 plt.show()
-                plt.imshow(np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
-                                    scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8])
+                plt.imshow(np_image[scroll_area[1] * 8:(scroll_area[1] + scroll_area[3]) * 8,
+                                    scroll_area[0] * 8:(scroll_area[0] + scroll_area[2]) * 8])
                 plt.show()
             #plt.imshow(np.tile(fullNTs, (2, 2))[sy:sy+scroll_area[3], sx:sx+scroll_area[2]])
-            #plt.show()
+            # plt.show()
             # TODO: test this!
-            scrolled_nt_outputs.append(fullNTs[sy:sy+scroll_area[3],
-                                               sx:sx+scroll_area[2]])
-            scrolled_attr_outputs.append(fullAttr[sy:sy+scroll_area[3],
-                                                  sx:sx+scroll_area[2]])
+            scrolled_nt_outputs.append(fullNTs[sy:sy + scroll_area[3],
+                                               sx:sx + scroll_area[2]])
+            scrolled_attr_outputs.append(fullAttr[sy:sy + scroll_area[3],
+                                                  sx:sx + scroll_area[2]])
             tm_scrolls[timestep] = (sx, sy)
-            px, py = tm_scrolls[timestep-1] if timestep > 0 else (sx, sy)
-            mx, my = (sx-px, sy-py)
+            px, py = tm_scrolls[timestep - 1] if timestep > 0 else (sx, sy)
+            mx, my = (sx - px, sy - py)
             if mx >= 16:
                 mx -= 32
             if mx <= -16:
