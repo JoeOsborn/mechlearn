@@ -101,6 +101,7 @@ def ppu_output(emu, inputVec, **kwargs):
     get_sprite_data = kwargs.get("sprite_data", True)
     get_scroll = kwargs.get("scrolling", True) or get_bg_data
     test_control = kwargs.get("test_control", False) 
+    inputs2 = kwargs.get("inputs2", [0]*len(inputVec))
     
 
     if get_scroll:
@@ -119,7 +120,7 @@ def ppu_output(emu, inputVec, **kwargs):
 
 
     has_controls = {}
-    for timestep, inp in enumerate(inputVec):
+    for timestep, (inp,inp2) in enumerate(zip(inputVec,inputs2)):
 
         if not (timestep % peekevery == 0):
             continue
@@ -127,14 +128,14 @@ def ppu_output(emu, inputVec, **kwargs):
         if test_control:
             images = []
             emu.save(start_state)
-            emu.stepFull(inp, 0x0)
+            emu.stepFull(inp, inp2)
             steps = 3
             next = timestep
             for ii in range(steps):
                 next = next + 1
                 if next >= len(inputVec):
                     next = len(inputVec)-1
-                emu.stepFull(inputVec[next],0x0)            
+                emu.stepFull(inputVec[next],inp2)            
             emu.imageInto(img_buffer)
             np_image = convert_image(img_buffer)           
             
@@ -154,7 +155,7 @@ def ppu_output(emu, inputVec, **kwargs):
             has_controls[timestep] = has_control
             emu.load(start_state)            
         
-        emu.stepFull(inp, 0x0)
+        emu.stepFull(inp, inp2)
         
         if get_scroll or get_bg_data or test_control:
             emu.imageInto(img_buffer)
@@ -281,22 +282,20 @@ def ppu_output(emu, inputVec, **kwargs):
                             int(fullAttr[ii, jj]),pt_id)
                     big_picture[ii*8:ii*8+8, jj*8:jj*8+8, :] = tile2colorized[pair]/255.0
 
-            center = False
+            center = True
             if center:
                 insets = cv2.matchTemplate(
 
-                    cv2.cvtColor((big_picture*128+128).astype(np.uint8), cv2.COLOR_BGR2GRAY),
+                    cv2.cvtColor((big_picture*128+127).astype(np.uint8), cv2.COLOR_BGR2GRAY),
                     cv2.cvtColor((np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
-                                       scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8]/2+0.5).astype(np.uint8), cv2.COLOR_BGR2GRAY),
-                    cv2.TM_CCOEFF_NORMED
+                                           scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8]/2+128).astype(np.uint8), cv2.COLOR_BGR2GRAY),cv2.TM_CCOEFF_NORMED
                 )
             else:
                 insets = cv2.matchTemplate(
                 
-                    cv2.cvtColor((big_picture*256).astype(np.uint8), cv2.COLOR_BGR2GRAY),
+                    cv2.cvtColor((big_picture*255).astype(np.uint8), cv2.COLOR_BGR2GRAY),
                     cv2.cvtColor((np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
-                                       scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8]).astype(np.uint8), cv2.COLOR_BGR2GRAY),
-                    cv2.TM_CCOEFF_NORMED
+                                       scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8]).astype(np.uint8), cv2.COLOR_BGR2GRAY),cv2.TM_CCOEFF_NORMED
                 )
             minv, maxv, minloc, maxloc = cv2.minMaxLoc(insets)
             sx = maxloc[0]/8
@@ -306,11 +305,13 @@ def ppu_output(emu, inputVec, **kwargs):
                 print "T:",timestep
                 plt.imshow(insets)
                 plt.show()
-                plt.imshow(cv2.cvtColor((big_picture*128+128).astype(np.uint8), cv2.COLOR_BGR2GRAY))
+                plt.imshow(cv2.cvtColor((big_picture*128+127).astype(np.uint8), cv2.COLOR_BGR2GRAY))
                 plt.plot((sx*8,(sx+scroll_area[2])*8,(sx+scroll_area[2])*8,sx*8,sx*8),
                          (sy*8,sy*8,(sy+scroll_area[3])*8,(sy+scroll_area[3])*8,sy*8),'r')
                 plt.show()
-                
+                plt.imshow(cv2.cvtColor(( np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
+                                                   scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8]/2+128).astype(np.uint8), cv2.COLOR_BGR2GRAY))
+                plt.show()
                 plt.imshow(np_image[scroll_area[1]*8:(scroll_area[1]+scroll_area[3])*8,
                                     scroll_area[0]*8:(scroll_area[0]+scroll_area[2])*8])
                 plt.show()
