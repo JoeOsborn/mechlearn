@@ -135,8 +135,9 @@ def tracks_from_sprite_data(sprite_data):
                             left,
                             right,
                             top,
-                            bottom)] = set([dat[ii][0]
-                                            for ii in sorted(merged[set_id])])
+                            bottom)] = [dat[ii]
+                                            for ii in sorted(merged[set_id])]
+            
 
     sigma = 8.0
     min_gate = 5.0
