@@ -125,9 +125,13 @@ def get_all_sprites(fc):
             attributes.append(attr)
             # x, y, idx, bg, pal, hflip, vlip, ppu_regs
             ppu_values = fc.ppu.values
-            output.append([sprite_ram[ii + 3] * 1., sprite_ram[ii] * 1. + 1, sprite_ram[ii + 1],
-                           attr['background'], attr['palette'], attr[
-                               'hflip'], attr['vflip'],
+            output.append([sprite_ram[ii + 3] * 1.,
+                           sprite_ram[ii] * 1. + 1,
+                           sprite_ram[ii + 1],
+                           attr['background'],
+                           attr['palette'],
+                           attr['hflip'],
+                           attr['vflip'],
                            [ppu_values[0],
                             ppu_values[1],
                             ppu_values[2],

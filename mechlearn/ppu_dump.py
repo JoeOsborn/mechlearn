@@ -73,7 +73,9 @@ def nt_page(nt, nti, mirroring):
     return nt, full_attr
 
 
-def test_control_(emu, start_state, inp, inp2, timestep, inputVec, img_buffer, np_image):
+def test_control_(emu, start_state,
+                  inp, inp2, timestep, inputVec,
+                  img_buffer, img_buffer2):
     emu.save(start_state)
     emu.stepFull(inp, inp2)
     steps = 3
@@ -82,19 +84,20 @@ def test_control_(emu, start_state, inp, inp2, timestep, inputVec, img_buffer, n
         next = next + 1
         if next >= len(inputVec):
             next = len(inputVec) - 1
-            emu.stepFull(inputVec[next], inp2)
-            emu.imageInto(img_buffer)
-            np_image = convert_image(img_buffer)
+        emu.stepFull(inputVec[next], inp2)
+    emu.imageInto(img_buffer)
     has_control = False
     for test_inp in [0, 1, 4, 5, 6, 7]:
         emu.load(start_state)
         emu.stepFull(1 << test_inp, 0x0)
         for ii in range(steps):
             emu.stepFull(1 << test_inp, 0x0)
-            emu.imageInto(img_buffer)
-            image = convert_image(img_buffer)
-        if np.sum(np.abs(image - np_image)) > 0:
-            has_control = True
+        emu.imageInto(img_buffer2)
+        for i in range(len(img_buffer)):
+            if img_buffer[i] != img_buffer2[i]:
+                has_control = True
+                break
+        if has_control:
             break
     emu.load(start_state)
     return has_control
@@ -114,7 +117,7 @@ def test_scrolling_visual_(np_image_prev, np_image, net_x, net_y,
         cv2.TM_CCOEFF_NORMED
     )
     minv, maxv, minloc, maxloc = cv2.minMaxLoc(result)
-    print "Match1", minv, maxv, minloc, maxloc
+    # print "Match1", minv, maxv, minloc, maxloc
     best_sx, best_sy = 0, 0
     cx, cy = offset_left, offset_top
     scroll_window = 5
@@ -130,7 +133,7 @@ def test_scrolling_visual_(np_image_prev, np_image, net_x, net_y,
                 best_match = match
     net_x += best_sx
     net_y += best_sy
-    print "Sc1 Offset:", best_sx, best_sy, net_x, net_y
+    # print "Sc1 Offset:", best_sx, best_sy, net_x, net_y
     return (best_sx, best_sy), (net_x, net_y)
 
 
@@ -143,7 +146,7 @@ def test_bg_data_full_(emu, tile2colorized):
     below_nti = v_neighbors[base_nti]
     right_below_nti = v_neighbors[right_nti]
 
-    print "NTS:\n", base_nti, right_nti, "\n", below_nti, right_below_nti
+    # print "NTS:\n", base_nti, right_nti, "\n", below_nti, right_below_nti
 
     # nt
     # Getting the mirroring right and grabbing the right tile seems
@@ -156,7 +159,7 @@ def test_bg_data_full_(emu, tile2colorized):
     nta = pointer_to_numpy(emu.fc.ppu.NTARAM)
     # change to handle other nametables?
     mirroring = emu.fc.cart.mirroring
-    print "M", mirroring, "base", base_nti
+    # print "M", mirroring, "base", base_nti
     # 0 - Hori
     # 1 - Vert
     # 2 - all use 0
@@ -211,7 +214,7 @@ def test_bg_data_full_(emu, tile2colorized):
 
 def test_bg_data_scrolled_(nts, attrs, pal, tile2colorized,
                            scroll_area, timestep, last_tm_scroll,
-                           big_picture, np_image):
+                           big_picture, np_image, debug_output):
     # OK, let's figure out our scrolling situation.
     # First build a mighty template image out of the whole picture.
     # We're gonna template match to see how the baby real image fits inside
@@ -257,8 +260,7 @@ def test_bg_data_scrolled_(nts, attrs, pal, tile2colorized,
     minv, maxv, minloc, maxloc = cv2.minMaxLoc(insets)
     sx = maxloc[0] / 8
     sy = maxloc[1] / 8
-    print "Sc2:", sx, sy
-    if timestep % 60 == 0:
+    if timestep % 60 == 0 and debug_output:
         print "T:", timestep
         plt.imshow(insets)
         plt.show()
@@ -282,6 +284,7 @@ def test_bg_data_scrolled_(nts, attrs, pal, tile2colorized,
             np_image[scroll_area[1] * 8:(scroll_area[1] + scroll_area[3]) * 8,
                      scroll_area[0] * 8:(scroll_area[0] + scroll_area[2]) * 8])
         plt.show()
+
     #plt.imshow(np.tile(fullNTs, (2, 2))[sy:sy+scroll_area[3], sx:sx+scroll_area[2]])
     # plt.show()
     # TODO: test this!
@@ -302,7 +305,7 @@ def test_bg_data_scrolled_(nts, attrs, pal, tile2colorized,
     if my <= -15:
         my += 30
     tm_motion = (mx, my)
-    print sx, sy, px, py, tm_motion
+    # print sx, sy, px, py, tm_motion
     return scrolled_nt, scrolled_attr, tm_motion, tm_scroll
 
 
@@ -345,9 +348,11 @@ def ppu_output(emu, inputVec, **kwargs):
     tm_motion = {}
     palettes = []
     img_buffer = VectorBytes()
+    img_buffer2 = VectorBytes()
     np_image = np.zeros(shape=(240, 256, 1), dtype=np.uint8)
     np_image_prev = np.zeros(shape=(240, 256, 1), dtype=np.uint8)
     np_image_temp = None
+    debug_output = kwargs.get("debug_output", True)
     get_bg_data = kwargs.get("bg_data", True)
     scroll_area = kwargs.get("scroll_area", (0, 0, 32, 30))
     get_sprite_data = kwargs.get("sprite_data", True)
@@ -383,7 +388,7 @@ def ppu_output(emu, inputVec, **kwargs):
                 timestep,
                 inputVec,
                 img_buffer,
-                np_image
+                img_buffer2
             )
 
         emu.stepFull(inp, inp2)
@@ -416,7 +421,8 @@ def ppu_output(emu, inputVec, **kwargs):
                 scroll_area,
                 timestep,
                 tm_scrolls[timestep - 1] if timestep > 0 else None,
-                big_picture, np_image
+                 big_picture, np_image,
+                 debug_output
             )
             scrolled_nt_outputs.append(scrolled_nt)
             scrolled_attr_outputs.append(scrolled_attr)
@@ -453,3 +459,60 @@ def ppu_output(emu, inputVec, **kwargs):
     if test_control:
         results['has_controls'] = has_controls
     return results
+
+
+if __name__ == '__main__':
+    import fceulib
+    import ppu_dump
+    import sys
+    from PIL import Image
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    from fceu_help import pointer_to_numpy
+    rom = "metroid.nes"
+    #movie = "metroid.fm2"
+    start_t = 300
+    movie = 'lordtom-metroid-100.fm2'
+    #movie = "metroid-long.fm2"
+
+    #rom = 'zelda.nes'
+    #movie = 'baxter,jprofit22-legendofzelda.fm2'
+    #movie = 'zelda.fm2'
+
+    #rom = 'zelda.nes'
+    #movie = 'zelda_dungeon1.fm2'
+    #movie = 'zelda.fm2'
+    #start_t = 300
+
+    # rom = "smb2u.nes"
+    # movie = "smb2u.fm2"
+    # start_t = 700
+    emu = fceulib.runGame(rom)
+    inputs1 = fceulib.readInputs(movie)
+    inputs2 = fceulib.readInputs2(movie)
+
+    for i, i2 in zip(inputs1[:start_t], inputs2[:start_t]):
+        emu.stepFull(i, i2)
+
+    end = 600
+    # METROID
+    scroll_area = (0, 0, 32, 30 - 0)
+
+    # ZELDA
+    #scroll_area= (0,8,32,30-8)
+
+    #MARIO, ZELDA2
+    #scroll_area = (0, 4, 32, 30-4)
+
+    ep_data = ppu_dump.ppu_output(emu,
+                                  inputs1[start_t:end],
+                                  inputs2=inputs2[start_t:end],
+                                  bg_data=True,
+                                  scrolling=True,
+                                  sprite_data=True,
+                                  colorized_tiles=False,
+                                  display=False,
+                                  test_control=True,
+                                  scroll_area=scroll_area,
+                                  debug_output=False)
