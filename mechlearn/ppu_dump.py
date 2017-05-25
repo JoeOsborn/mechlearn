@@ -1,6 +1,7 @@
 import fceulib
 from fceulib import VectorBytes
 import numpy as np
+import random
 from fceu_help import pointer_to_numpy, colorize_tile
 from fceu_help import get_all_sprites, get_tile, get_sprite, outputImage
 from math import log
@@ -88,16 +89,18 @@ def test_control_(emu, start_state,
         emu.stepFull(inputVec[next], inp2)
     emu.imageInto(img_buffer)
     has_control = False
-    for test_inp in [0, 1, 4, 5, 6, 7]:
+    inps = [0, 1, 4, 5, 6, 7]
+    # Might save some simulation steps?
+    random.shuffle(inps)
+    for test_inp in inps:
         emu.load(start_state)
         emu.stepFull(1 << test_inp, 0x0)
         for ii in range(steps):
             emu.stepFull(1 << test_inp, 0x0)
         emu.imageInto(img_buffer2)
-        for i in range(len(img_buffer)):
-            if img_buffer[i] != img_buffer2[i]:
-                has_control = True
-                break
+        np1 = np.array(img_buffer, copy=False)
+        np2 = np.array(img_buffer2, copy=False)
+        has_control = np.sum(np.abs(np1 - np2)) > 0
         if has_control:
             break
     emu.load(start_state)
@@ -213,6 +216,18 @@ def test_bg_data_full_(emu, tile2colorized):
     return fullNTs, fullAttr, pt_id
 
 
+def fill_big_picture(nts, attrs, pal, tile2colorized, big_picture):
+    for ii in range(attrs.shape[0]):
+        for jj in range(attrs.shape[1]):
+            pair = (int(nts[ii, jj]),
+                    int(attrs[ii, jj]),
+                    pal)
+            big_picture[ii * 8:ii * 8 + 8,
+                        jj * 8:jj * 8 + 8,
+                        :] = tile2colorized[pair]
+    big_picture /= 255.0
+
+
 def test_bg_data_scrolled_(nts, attrs, pal, tile2colorized,
                            scroll_area, timestep, last_tm_scroll,
                            big_picture, np_image, debug_output):
@@ -222,13 +237,7 @@ def test_bg_data_scrolled_(nts, attrs, pal, tile2colorized,
     # the big full screen image.
     # We can't really use the scroll info determined earlier, because we don't know
     # the x and y scroll as of initialization time
-    for ii in range(nts.shape[0]):
-        for jj in range(attrs.shape[1]):
-            pair = (int(nts[ii, jj]),
-                    int(attrs[ii, jj]), pal)
-            big_picture[ii * 8:ii * 8 + 8, jj * 8:jj *
-                        8 + 8, :] = tile2colorized[pair] / 255.0
-
+    fill_big_picture(nts, attrs, pal, tile2colorized, big_picture)
     center = True
     if center:
         insets = cv2.matchTemplate(
@@ -377,7 +386,6 @@ def ppu_output(emu, inputVec, **kwargs):
 
     has_controls = {}
     for timestep, (inp, inp2) in enumerate(zip(inputVec, inputs2)):
-        print timestep
         if not (timestep % peekevery == 0):
             continue
 
@@ -488,7 +496,7 @@ if __name__ == '__main__':
     for i, i2 in zip(inputs1[:start_t], inputs2[:start_t]):
         emu.stepFull(i, i2)
 
-    end = start_t + 60
+    end = start_t + 600
     # METROID
     scroll_area = (0, 0, 32, 30 - 0)
 
