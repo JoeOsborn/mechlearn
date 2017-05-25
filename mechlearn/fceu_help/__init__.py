@@ -2,10 +2,11 @@ import numpy as np
 from PIL import Image
 
 
-def pointer_to_numpy(ptr, length=0):
+def pointer_to_numpy(ptr, copy=True, length=0):
     if length == 0:
         length = len(ptr)
-    return np.array([ptr[xx] for xx in range(length)])
+    ret = np.array(ptr, copy=copy)[:length]
+    return ret
 
 
 def hold(mask, duration):
@@ -36,11 +37,13 @@ def get_sprite(tile_id, table, fc):
         fg_pat_addr = 0x1000 if table else 0x0000
         #fg_pat_addr = 0x1000 if (tile_id & 0x01) else 0x0000
 
-        fg_ram = pointer_to_numpy(fc.cart.getVPageChunk(fg_pat_addr), 0x1000)
+        fg_ram = pointer_to_numpy(
+            fc.cart.getVPageChunk(fg_pat_addr), False, 0x1000)
         tile_id = (tile_id >> 1) << 1
     else:
         fg_pat_addr = 0x0000 if (fc.ppu.values[0] & (1 << 4)) else 0x1000
-        fg_ram = pointer_to_numpy(fc.cart.getVPageChunk(fg_pat_addr), 0x1000)
+        fg_ram = pointer_to_numpy(
+            fc.cart.getVPageChunk(fg_pat_addr), False, 0x1000)
 
     tile = []
     for ii in range(repeat):
@@ -64,7 +67,8 @@ def get_sprite(tile_id, table, fc):
 def get_tile(tile_id, fc):
 
     bg_pat_addr = 0x1000 if (fc.ppu.values[0] & (1 << 4)) else 0x0000
-    bg_ram = pointer_to_numpy(fc.cart.getVPageChunk(bg_pat_addr), 0x1000)
+    bg_ram = pointer_to_numpy(
+        fc.cart.getVPageChunk(bg_pat_addr), False, 0x1000)
 
     tile = []
     for yy in range(8):
@@ -114,8 +118,8 @@ def colorize_tile(tile, attribute, palette_table):
 
 def get_all_sprites(fc):
     ram_ptr = fc.fceu.RAM
-    pt = pointer_to_numpy(fc.ppu.PALRAM)
-    sprite_ram = pointer_to_numpy(fc.ppu.SPRAM)
+    pt = pointer_to_numpy(fc.ppu.PALRAM, copy=False)
+    sprite_ram = pointer_to_numpy(fc.ppu.SPRAM, copy=False)
     output = []
     ids = set()
     attributes = []

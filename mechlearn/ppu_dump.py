@@ -4,7 +4,8 @@ import numpy as np
 from fceu_help import pointer_to_numpy, colorize_tile
 from fceu_help import get_all_sprites, get_tile, get_sprite, outputImage
 from math import log
-import matplotlib.pyplot as plt
+if __name__ != "__main__":
+    import matplotlib.pyplot as plt
 # Needed for Joe's pyenv to find CV2
 import site
 site.addsitedir("/usr/local/lib/python2.7/site-packages")
@@ -13,7 +14,7 @@ import cv2
 
 def convert_image(img_buffer, col=cv2.COLOR_RGB2GRAY):
     # TODO: without allocations/reshape?
-    screen = pointer_to_numpy(img_buffer)
+    screen = pointer_to_numpy(img_buffer, copy=False)
     return screen.reshape([256, 256, 4])[:240, :, :3].astype(np.uint8)
 
 
@@ -141,7 +142,7 @@ def test_bg_data_full_(emu, tile2colorized):
     h_neighbors = {0: 1, 1: 0, 2: 3, 3: 2}
     v_neighbors = {0: 2, 2: 0, 1: 3, 3: 1}
 
-    base_nti = pointer_to_numpy(emu.fc.ppu.values)[0] & 0x3
+    base_nti = emu.fc.ppu.values[0] & 0x3
     right_nti = h_neighbors[base_nti]
     below_nti = v_neighbors[base_nti]
     right_below_nti = v_neighbors[right_nti]
@@ -156,7 +157,7 @@ def test_bg_data_full_(emu, tile2colorized):
     #  But it also relies on the global Pline to figure out which row it's in...
     #  and the `scanline` global...
     #
-    nta = pointer_to_numpy(emu.fc.ppu.NTARAM)
+    nta = pointer_to_numpy(emu.fc.ppu.NTARAM, copy=False)
     # change to handle other nametables?
     mirroring = emu.fc.cart.mirroring
     # print "M", mirroring, "base", base_nti
@@ -195,7 +196,7 @@ def test_bg_data_full_(emu, tile2colorized):
     ])
 
     pairs = set()
-    pt = pointer_to_numpy(emu.fc.ppu.PALRAM)
+    pt = pointer_to_numpy(emu.fc.ppu.PALRAM, copy=False)
     pt_id = tuple(pt.ravel())
     for ii in range(fullAttr.shape[0]):
         for jj in range(fullAttr.shape[1]):
@@ -376,7 +377,7 @@ def ppu_output(emu, inputVec, **kwargs):
 
     has_controls = {}
     for timestep, (inp, inp2) in enumerate(zip(inputVec, inputs2)):
-
+        print timestep
         if not (timestep % peekevery == 0):
             continue
 
@@ -462,14 +463,6 @@ def ppu_output(emu, inputVec, **kwargs):
 
 
 if __name__ == '__main__':
-    import fceulib
-    import ppu_dump
-    import sys
-    from PIL import Image
-    import numpy as np
-    import matplotlib.pyplot as plt
-
-    from fceu_help import pointer_to_numpy
     rom = "metroid.nes"
     #movie = "metroid.fm2"
     start_t = 300
@@ -495,7 +488,7 @@ if __name__ == '__main__':
     for i, i2 in zip(inputs1[:start_t], inputs2[:start_t]):
         emu.stepFull(i, i2)
 
-    end = 600
+    end = start_t + 60
     # METROID
     scroll_area = (0, 0, 32, 30 - 0)
 
@@ -505,14 +498,14 @@ if __name__ == '__main__':
     #MARIO, ZELDA2
     #scroll_area = (0, 4, 32, 30-4)
 
-    ep_data = ppu_dump.ppu_output(emu,
-                                  inputs1[start_t:end],
-                                  inputs2=inputs2[start_t:end],
-                                  bg_data=True,
-                                  scrolling=True,
-                                  sprite_data=True,
-                                  colorized_tiles=False,
-                                  display=False,
-                                  test_control=True,
-                                  scroll_area=scroll_area,
-                                  debug_output=False)
+    ep_data = ppu_output(emu,
+                         inputs1[start_t:end],
+                         inputs2=inputs2[start_t:end],
+                         bg_data=True,
+                         scrolling=True,
+                         sprite_data=True,
+                         colorized_tiles=False,
+                         display=False,
+                         test_control=True,
+                         scroll_area=scroll_area,
+                         debug_output=False)

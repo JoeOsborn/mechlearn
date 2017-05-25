@@ -178,7 +178,7 @@ class MultiTracker(object):
             h_neighbors = {0: 1, 1: 0, 2: 3, 3: 2}
             v_neighbors = {0: 2, 2: 0, 1: 3, 3: 1}
 
-            base_nti = pointer_to_numpy(emu.fc.ppu.values)[0] & 0x3
+            base_nti = emu.fc.ppu.values[0] & 0x3
             right_nti = h_neighbors[base_nti]
             below_nti = v_neighbors[base_nti]
             right_below_nti = v_neighbors[right_nti]
@@ -198,7 +198,7 @@ class MultiTracker(object):
             #  row it's in...
             #  and the `scanline` global...
             #
-            nta = pointer_to_numpy(emu.fc.ppu.NTARAM)
+            nta = pointer_to_numpy(emu.fc.ppu.NTARAM, copy=False)
             # change to handle other nametables?
             mirroring = emu.fc.cart.mirroring
             print "M", mirroring, "base", base_nti
@@ -242,7 +242,7 @@ class MultiTracker(object):
             o.full_attrs.append(fullAttr)
 
             pairs = set()
-            pt = pointer_to_numpy(emu.fc.ppu.PALRAM)
+            pt = pointer_to_numpy(emu.fc.ppu.PALRAM, copy=False)
             for ii in range(fullAttr.shape[0]):
                 for jj in range(fullAttr.shape[1]):
                     pairs.add((int(fullNTs[ii, jj]),
