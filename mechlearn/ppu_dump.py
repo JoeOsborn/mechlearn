@@ -333,7 +333,7 @@ def test_sprite_data_(emu, colorized2id, id2colorized, timestep, data):
                 colorized2id[uniq]
             ] = colorized_sprites[sprite_id]
         # print timestep,  colorized2id[uniq], sprite[:2]
-        data.append((timestep, colorized2id[uniq], sprite))
+        data[timestep] = (timestep, colorized2id[uniq], sprite)
     return data
 
 
@@ -341,22 +341,22 @@ def ppu_output(emu, inputVec, **kwargs):
     start = VectorBytes()
     emu.save(start)
 
-    peekevery = 1
+    peekevery = kwargs.get("peekevery", 1)
 
     colorized2id = {}
     id2colorized = {}
     tile2colorized = {}
-    data = []
-    nametable_outputs = []
-    attr_outputs = []
-    scrolled_nt_outputs = []
-    scrolled_attr_outputs = []
+    data = {}
+    nametable_outputs = {}
+    attr_outputs = {}
+    scrolled_nt_outputs = {}
+    scrolled_attr_outputs = {}
     xScrolls = None
     motion = {}
     scrolls = {}
     tm_scrolls = {}
     tm_motion = {}
-    palettes = []
+    palettes = {}
     img_buffer = VectorBytes()
     img_buffer2 = VectorBytes()
     np_image = np.zeros(shape=(240, 256, 1), dtype=np.uint8)
@@ -386,10 +386,9 @@ def ppu_output(emu, inputVec, **kwargs):
 
     has_controls = {}
     for timestep, (inp, inp2) in enumerate(zip(inputVec, inputs2)):
-        if not (timestep % peekevery == 0):
-            continue
-
-        if test_control:
+        should_peek = timestep % peekevery == 0
+        # Have to do this before running this step of input
+        if test_control and should_peek:
             has_controls[timestep] = test_control_(
                 emu,
                 start_state,
@@ -401,6 +400,8 @@ def ppu_output(emu, inputVec, **kwargs):
             )
 
         emu.stepFull(inp, inp2)
+        if not should_peek:
+            continue
 
         if get_scroll or get_bg_data or test_control:
             emu.imageInto(img_buffer)
@@ -421,20 +422,20 @@ def ppu_output(emu, inputVec, **kwargs):
 
         if get_bg_data:
             nts, attrs, pal = test_bg_data_full_(emu, tile2colorized)
-            nametable_outputs.append(nts)
-            attr_outputs.append(attrs)
-            palettes.append(pal)
+            nametable_outputs[timestep] = nts
+            attr_outputs[timestep] = attrs
+            palettes[timestep] = pal
             (scrolled_nt, scrolled_attr,
              tm_mot, tm_scroll) = test_bg_data_scrolled_(
                 nts, attrs, pal, tile2colorized,
                 scroll_area,
                 timestep,
-                tm_scrolls[timestep - 1] if timestep > 0 else None,
+                tm_scrolls[timestep - peekevery] if timestep > 0 else None,
                  big_picture, np_image,
                  debug_output
             )
-            scrolled_nt_outputs.append(scrolled_nt)
-            scrolled_attr_outputs.append(scrolled_attr)
+            scrolled_nt_outputs[timestep] = scrolled_nt
+            scrolled_attr_outputs[timestep] = scrolled_attr
             tm_motion[timestep] = tm_mot
             tm_scrolls[timestep] = tm_scroll
         if get_sprite_data:
@@ -496,7 +497,7 @@ if __name__ == '__main__':
     for i, i2 in zip(inputs1[:start_t], inputs2[:start_t]):
         emu.stepFull(i, i2)
 
-    end = start_t + 600
+    end = start_t + 3600
     # METROID
     scroll_area = (0, 0, 32, 30 - 0)
 
