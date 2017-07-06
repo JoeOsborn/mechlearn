@@ -15,7 +15,10 @@ import cv2
 
 def convert_image(img_buffer, col=cv2.COLOR_RGB2GRAY):
     # TODO: without allocations/reshape?
-    screen = pointer_to_numpy(img_buffer, copy=False)
+    
+    screen = pointer_to_numpy(img_buffer, copy=True)
+    
+
     return screen.reshape([256, 256, 4])[:240, :, :3].astype(np.uint8)
 
 
@@ -79,7 +82,9 @@ def test_control_(emu, start_state,
                   inp, inp2, timestep, inputVec,
                   img_buffer, img_buffer2):
     emu.save(start_state)
+    
     emu.stepFull(inp, inp2)
+    
     steps = 3
     next = timestep
     for ii in range(steps):
@@ -87,7 +92,9 @@ def test_control_(emu, start_state,
         if next >= len(inputVec):
             next = len(inputVec) - 1
         emu.stepFull(inputVec[next], inp2)
+    
     emu.imageInto(img_buffer)
+    
     has_control = False
     inps = [0, 1, 4, 5, 6, 7]
     # Might save some simulation steps?
@@ -104,6 +111,7 @@ def test_control_(emu, start_state,
         if has_control:
             break
     emu.load(start_state)
+    
     return has_control
 
 
@@ -120,6 +128,7 @@ def test_scrolling_visual_(np_image_prev, np_image, net_x, net_y,
                  scroll_area[0] * 8 + offset_left:scroll_area[0] * 8 + scroll_area[2] * 8 - offset_left * 2],
         cv2.TM_CCOEFF_NORMED
     )
+
     minv, maxv, minloc, maxloc = cv2.minMaxLoc(result)
     # print "Match1", minv, maxv, minloc, maxloc
     best_sx, best_sy = 0, 0
@@ -138,7 +147,7 @@ def test_scrolling_visual_(np_image_prev, np_image, net_x, net_y,
     net_x += best_sx
     net_y += best_sy
     # print "Sc1 Offset:", best_sx, best_sy, net_x, net_y
-    return (best_sx, best_sy), (net_x, net_y)
+    return (best_sx, best_sy), (net_x, net_y), maxv-minv
 
 
 def test_bg_data_full_(emu, tile2colorized):
@@ -339,6 +348,7 @@ def test_sprite_data_(emu, colorized2id, id2colorized, timestep, data):
 
 def ppu_output(emu, inputVec, **kwargs):
     start = VectorBytes()
+   
     emu.save(start)
 
     peekevery = kwargs.get("peekevery", 1)
@@ -357,6 +367,7 @@ def ppu_output(emu, inputVec, **kwargs):
     tm_scrolls = {}
     tm_motion = {}
     palettes = {}
+    corrs = {}
     img_buffer = VectorBytes()
     img_buffer2 = VectorBytes()
     np_image = np.zeros(shape=(240, 256, 1), dtype=np.uint8)
@@ -387,6 +398,7 @@ def ppu_output(emu, inputVec, **kwargs):
     has_controls = {}
     for timestep, (inp, inp2) in enumerate(zip(inputVec, inputs2)):
         should_peek = timestep % peekevery == 0
+        
         # Have to do this before running this step of input
         if test_control and should_peek:
             has_controls[timestep] = test_control_(
@@ -398,30 +410,39 @@ def ppu_output(emu, inputVec, **kwargs):
                 img_buffer,
                 img_buffer2
             )
-
+        
         emu.stepFull(inp, inp2)
+        
         if not should_peek:
             continue
 
         if get_scroll or get_bg_data or test_control:
+            
             emu.imageInto(img_buffer)
+            
             # TODO: without allocations?
             np_image = convert_image(img_buffer)
+            
 
+        
         if get_scroll and timestep > 0:
-            mot, scroll = test_scrolling_visual_(np_image_prev, np_image,
+            mot, scroll, maxv = test_scrolling_visual_(np_image_prev, np_image,
                                                  net_x, net_y,
                                                  offset_left, offset_top,
                                                  scroll_area)
             net_x, net_y = scroll
             motion[timestep] = mot
             scrolls[timestep] = scroll
+            corrs[timestep] = maxv
 
+        
         if display:
             outputImage(emu, 'images/{}'.format(timestep), img_buffer)
 
+        
         if get_bg_data:
             nts, attrs, pal = test_bg_data_full_(emu, tile2colorized)
+        
             nametable_outputs[timestep] = nts
             attr_outputs[timestep] = attrs
             palettes[timestep] = pal
@@ -434,10 +455,12 @@ def ppu_output(emu, inputVec, **kwargs):
                  big_picture, np_image,
                  debug_output
             )
+            
             scrolled_nt_outputs[timestep] = scrolled_nt
             scrolled_attr_outputs[timestep] = scrolled_attr
             tm_motion[timestep] = tm_mot
             tm_scrolls[timestep] = tm_scroll
+        
         if get_sprite_data:
             test_sprite_data_(
                 emu,
@@ -453,6 +476,7 @@ def ppu_output(emu, inputVec, **kwargs):
     if get_scroll:
         results["screen_motion"] = motion
         results["screen_scrolls"] = scrolls
+        results["screen_corrs"] = corrs
     if get_bg_data:
         results["full_nametables"] = nametable_outputs
         results["full_attrs"] = attr_outputs
