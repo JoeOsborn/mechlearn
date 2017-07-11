@@ -1,0 +1,44 @@
+param: up-control-gravity : 44.2503013557
+param: upFixedToDownDYReset : ('+', -132.0120651514726, ('+', ('*', -0.86878752917793123, ('x', 1)), ('*', -0.7408966949380088, ('y', 1))))
+param: upControlToDownDYReset : ('+', -132.0120651514726, ('+', ('*', -0.86878752917793123, ('x', 1)), ('*', -0.7408966949380088, ('y', 1))))
+param: terminalVY : 100000.0
+param: up-fixed-gravity : 44.2503013557
+param: gravity : 199.454809015
+param: downToGroundDYReset : ('+', 1.768546407440144e-17, ('+', ('*', 8.5154216579373401, ('x', 1)), ('*', 7.1615276815328236e-20, ('y', 1))))
+param: maxButtonDuration : 0.0333333333333
+param: minButtonDuration : 0.0333333333333
+param: upControlToUpFixedDYReset : 0.0
+param: groundToUpControlDYReset : ('+', -208.07141771117765, ('+', ('*', 7.430189767831016, ('x', 1)), ('*', -0.028610214511974263, ('y', 1))))
+vbl: ('y', 1) : 0.0
+vbl: ('x', 0) : 0.0
+vbl: ('y', 2) : 0.0
+vbl: ('x', 2) : 0.0
+vbl: ('y', 0) : 0.0
+vbl: ('x', 1) : 0.0
+constraint: ('y', 1) : (-1000000.0, 'terminalVY')
+initial: ground
+startstate: down
+flow: ('y', 2) gravity
+t: [('colliding', 'top', 'ground')] : None : down
+t: [('colliding', 'bottom', 'ground')] : {('y', 1): 'downToGroundDYReset'} : ground
+endstate: down
+startstate: up-fixed
+flow: ('y', 2) up-fixed-gravity
+t: [('colliding', 'top', 'ground')] : {('y', 1): 'upFixedToDownDYReset'} : down
+t: [('gte', ('y', 1), 0)] : {('y', 1): 'upFixedToDownDYReset'} : down
+endstate: up-fixed
+startstate: up-control
+flow: ('y', 2) up-control-gravity
+t: [('colliding', 'top', 'ground')] : {('y', 1): 'upControlToDownDYReset'} : down
+t: [('gte', ('y', 1), 0)] : {('y', 1): 'upControlToDownDYReset'} : down
+t: [('timer', 'maxButtonDuration')] : {('y', 1): 'upControlToUpFixedDYReset'} : up-fixed
+t: [('button', 'off', 'jump'), ('timer', 'minButtonDuration')] : {('y', 1): 'upControlToUpFixedDYReset'} : up-fixed
+endstate: up-control
+startstate: dead
+flow: ('y', 1) 0
+endstate: dead
+startstate: ground
+flow: ('y', 1) 0
+t: [('button', 'pressed', 'jump')] : {('y', 1): 'groundToUpControlDYReset'} : up-control
+t: [('not', ('colliding', 'bottom', 'ground'))] : None : down
+endstate: ground
