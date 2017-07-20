@@ -7,7 +7,8 @@ import logging
 import timeit
 
 
-def start(rom):
+def start(config):
+    rom = config.get("rom", "mario.nes")
     amap = datrie.AlphaMap()
     amap.add_range("0", "9")
     amap.add_range("a", "f")
@@ -24,7 +25,7 @@ def start(rom):
 
     context = zmq.Context()
     sock = context.socket(zmq.REP)
-    sock.bind("tcp://*:5555")
+    sock.bind("tcp://127.0.0.1:" + config["fceux"])
 
     while True:
         msg = sock.recv_json()
@@ -104,7 +105,7 @@ def start(rom):
             emu.load(state)
             for d in wanted_data:
                 if d == "framebuffer":
-                    here_data[d] = emu.image
+                    here_data[d] = list(emu.image)
                 elif d == "inputs":
                     input_moves = [string.atoi(prefix[ii:i + 2], 16)
                                    for ii in range(len(prefix))]
@@ -136,8 +137,10 @@ def start(rom):
 
 if __name__ == "__main__":
     import sys
+    import json
     logging.basicConfig(level=logging.INFO)
-    start("mario.nes" if len(sys.argv) < 2 else sys.argv[1])
+    start(json.load(open("services.json", 'r'))
+          if len(sys.argv) < 2 else sys.argv[1])
 
 # Next steps:
 # Child worker processes
