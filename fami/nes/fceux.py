@@ -2,19 +2,21 @@ import fceulib
 import zmq
 import datrie
 import collections
-import numpy
+import string
+import logging
 
 
 def start(rom):
     amap = datrie.AlphaMap()
-    amap._add_range(1, 256)
+    amap.add_range("0", "9")
+    amap.add_range("a", "f")
     inputs_to_keys = datrie.Trie(alpha_map=amap)
-    states_to_keys = {}
+    #states_to_keys = {}
     keys_to_states = {}
     emu = fceulib.runGame(rom)
     init_state = fceulib.VectorBytes()
     emu.save(init_state)
-    states_to_keys[tuple(init_state)] = 0
+    #states_to_keys[tuple(init_state)] = 0
     keys_to_states[0] = (init_state, u"")
     # No need to put something in inputs_to_keys for null string
     next_state = 1
@@ -38,9 +40,8 @@ def start(rom):
         state, prefix = keys_to_states[start_id]
         input_key = prefix
         for i in inputs:
-            # This heinous +1 business is because null character keys break
-            # datrie's string comparisons
-            input_key += chr(i + 1)
+            # Convert to hex
+            input_key += hex(i)[2:].zfill(2)
         longest_prefix, longest_id = inputs_to_keys.longest_prefix_item(
             input_key,
             (u"", 0)
@@ -49,43 +50,39 @@ def start(rom):
         interesting.append(start_id)
         # Following states are also interesting.
         # We handle the start and following separately in case we start at t=0
-        # We also iterate up to longest_prefix+2 because we want to include
+        # We also iterate up to longest_prefix+4 because we want to include
         # that found prefix.
-        for i in range(len(prefix) + 2, len(longest_prefix) + 2, 2):
+        # (4 chars per time step: 2 for p1, 2 for p2 since we use a hex encoding)
+        for i in range(len(prefix) + 4, len(longest_prefix) + 4, 4):
             segment = longest_prefix[:i]
             state_id = inputs_to_keys[segment]
             # print "Reuse", state_id, "from", segment
             interesting.append(state_id)
-        remaining = len(input_key) - len(longest_prefix)
+        remaining = (len(input_key) - len(longest_prefix)) / 2
         prefix_key = longest_prefix
-        # print "K left:", remaining / 2
+        logging.info("Running %d new emulation steps" % (remaining / 2))
         if remaining > 0:
             emu.load(keys_to_states[longest_id][0])
         for i in range(0, remaining, 2):
             inp = inputs[i]
-            # This heinous +1 business is because null character keys break
-            # datrie's string comparisons
-            prefix_key = prefix_key + chr(inp + 1)
+            prefix_key = prefix_key + hex(inp)[2:].zfill(2)
             inp2 = inputs[i + 1]
-            # Same
-            prefix_key += chr(inp2 + 1)
+            prefix_key += hex(inp2)[2:].zfill(2)
             here_state = fceulib.VectorBytes()
             emu.stepFull(inp, inp2)
             emu.save(here_state)
             # we know this is a brand new input sequence but it might be a symmetric state
             # this way we can track both of those possibilities
-            hst = tuple(here_state)
-            if hst in states_to_keys:
-                state = states_to_keys[hst]
-                inputs_to_keys[prefix_key] = state
-                # print "Push2", state
-                interesting.append(state)
+            # hst = tuple(here_state)
+            if False:  # hst in states_to_keys:
+                # state = states_to_keys[hst]
+                # inputs_to_keys[prefix_key] = state
+                # interesting.append(state)
+                pass
             else:
-                states_to_keys[hst] = next_state
+                # states_to_keys[hst] = next_state
                 keys_to_states[next_state] = here_state, prefix_key
-                # print prefix_key
                 inputs_to_keys[prefix_key] = next_state
-                # print "Push3", next_state
                 interesting.append(next_state)
                 next_state += 1
         # Now, what do we gather up and send back?
@@ -102,10 +99,9 @@ def start(rom):
                 if d == "framebuffer":
                     here_data[d] = emu.image
                 elif d == "inputs":
-                    # This heinous - 1 business is because null character keys
-                    # break datrie's string comparisons
-                    here_data[d] = (map(lambda n: ord(n) - 1, prefix[::2]),
-                                    map(lambda n: ord(n) - 1, prefix[1::2]))
+                    input_moves = [string.atoi(prefix[ii:i + 2], 16)
+                                   for ii in range(len(prefix))]
+                    here_data[d] = (input_moves[::2], input_moves[1::2])
                 elif d == "ram":
                     buf = emu.memory
                     here_data[d] = list(buf)
@@ -133,6 +129,7 @@ def start(rom):
 
 if __name__ == "__main__":
     import sys
+    logging.basicConfig(level=logging.INFO)
     start("mario.nes" if len(sys.argv) < 2 else sys.argv[1])
 
 # Next steps:
