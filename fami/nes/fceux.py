@@ -4,6 +4,7 @@ import datrie
 import collections
 import string
 import logging
+import timeit
 
 
 def start(rom):
@@ -27,10 +28,12 @@ def start(rom):
 
     while True:
         msg = sock.recv_json()
+        tstart = timeit.default_timer()
         # msg will be "from state id SID, do these inputs as a sequence of
         # numbers"
         start_id = msg["state"]
         inputs = msg["inputs"]
+        logging.info("Start; asking for %d net states" % (len(inputs) / 2))
         # print "hi", inputs_to_keys.items(), map(lambda a:
         # keys_to_states[a][1], keys_to_states)
         wanted_data = msg.get("data", [])
@@ -61,6 +64,7 @@ def start(rom):
         remaining = (len(input_key) - len(longest_prefix)) / 2
         prefix_key = longest_prefix
         logging.info("Running %d new emulation steps" % (remaining / 2))
+        temustart = timeit.default_timer()
         if remaining > 0:
             emu.load(keys_to_states[longest_id][0])
         for i in range(0, remaining, 2):
@@ -85,6 +89,9 @@ def start(rom):
                 inputs_to_keys[prefix_key] = next_state
                 interesting.append(next_state)
                 next_state += 1
+        tdone = timeit.default_timer()
+        logging.info("Time to use cache: %0.6f; Time to emulate: %0.6f" %
+                     (temustart - tstart, tdone - temustart))
         # Now, what do we gather up and send back?
         out_msg = {
             "states": list(interesting),
