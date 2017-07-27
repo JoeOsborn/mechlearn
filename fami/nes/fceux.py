@@ -1,3 +1,5 @@
+# -*- compile-command: "python -m nes.fceux "; default-directory: "~/Projects/mechlearn/fami/" -*-
+
 import fceulib
 import zmq
 import datrie
@@ -5,6 +7,7 @@ import collections
 import string
 import logging
 import timeit
+import numpy
 
 
 def start(config):
@@ -19,6 +22,10 @@ def start(config):
     init_state = fceulib.VectorBytes()
     emu.save(init_state)
     #states_to_keys[tuple(init_state)] = 0
+
+    # TODO: use a hash of the state as the key?
+    # It feels off that it is so sensitive to ordering.
+
     keys_to_states[0] = (init_state, u"")
     # No need to put something in inputs_to_keys for null string
     next_state = 1
@@ -33,7 +40,8 @@ def start(config):
         # msg will be "from state id SID, do these inputs as a sequence of
         # numbers"
         start_id = msg["state"]
-        inputs = msg["inputs"]
+        print "MSG:", msg
+        inputs = msg.get("inputs", [])
         logging.info("Start; asking for %d net states" % (len(inputs) / 2))
         # print "hi", inputs_to_keys.items(), map(lambda a:
         # keys_to_states[a][1], keys_to_states)
@@ -116,10 +124,21 @@ def start(config):
                 elif d == "nta":
                     buf = emu.fc.ppu.NTARAM
                     here_data[d] = list(buf)
+                elif d == "mirror":
+                    here_data[d] = emu.fc.cart.mirroring
                 elif d == "chr":
-                    bufs = (emu.fc.ppu.getVNAPage(0),
-                            emu.fc.ppu.getVNAPage(1))
-                    here_data[d] = list(bufs[0]) + list(bufs[1])
+                    # bufs = (emu.fc.ppu.getVNAPage(0),
+                    #         emu.fc.ppu.getVNAPage(1))
+                    #here_data[d] = list(bufs[0]) + list(bufs[1])
+                    buf1 = numpy.array(
+                        emu.fc.cart.getVPageChunk(0),
+                        copy=False,
+                        dtype=numpy.uint8)[:0x1000]
+                    buf2 = numpy.array(
+                        emu.fc.cart.getVPageChunk(0x1000),
+                        copy=False,
+                        dtype=numpy.uint8)[:0x1000]
+                    here_data[d] = buf1.tolist() + buf2.tolist()
                 elif d == "pal":
                     buf = emu.fc.ppu.PALRAM
                     here_data[d] = list(buf)

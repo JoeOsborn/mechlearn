@@ -1,3 +1,5 @@
+# -*- compile-command: "python -m nes.control "; default-directory: "~/Projects/mechlearn/fami/" -*-
+
 import zmq
 
 
