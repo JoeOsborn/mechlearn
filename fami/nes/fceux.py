@@ -10,6 +10,12 @@ import timeit
 import numpy
 
 
+def last_move(prefix):
+    in1 = int(prefix[-4:-2], 16)
+    in2 = int(prefix[-2:], 16)
+    return in1, in2
+
+
 def start(config):
     rom = config.get("rom", "mario.nes")
     amap = datrie.AlphaMap()
@@ -40,9 +46,12 @@ def start(config):
         # msg will be "from state id SID, do these inputs as a sequence of
         # numbers"
         start_id = msg["state"]
-        print "MSG:", msg
+        # print "MSG:", msg
         inputs = msg.get("inputs", [])
         logging.info("Start; asking for %d net states" % (len(inputs) / 2))
+        if start_id == 0 and len(inputs) == 0:
+            logging.warning(
+                "Data about just the initial state is probably not going to be interesting or useful")
         # print "hi", inputs_to_keys.items(), map(lambda a:
         # keys_to_states[a][1], keys_to_states)
         wanted_data = msg.get("data", [])
@@ -75,25 +84,32 @@ def start(config):
         logging.info("Running %d new emulation steps" % (remaining / 2))
         temustart = timeit.default_timer()
         if remaining > 0:
-            emu.load(keys_to_states[longest_id][0])
+            start_save, start_save_prefix = keys_to_states[longest_id]
+            emu.load(start_save)
+            if len(start_save_prefix) > 0:
+                start_in1, start_in2 = last_move(start_save_prefix)
+                emu.stepFull(start_in1, start_in2)
         for i in range(0, remaining, 2):
             inp = inputs[i]
             prefix_key = prefix_key + hex(inp)[2:].zfill(2)
             inp2 = inputs[i + 1]
             prefix_key += hex(inp2)[2:].zfill(2)
             here_state = fceulib.VectorBytes()
-            emu.stepFull(inp, inp2)
+            # We save the state just beforehand, so we can load it up and then
+            # do a stepFull to be sure all the emulator state is correct later
+            # on.
             emu.save(here_state)
+            emu.stepFull(inp, inp2)
             # we know this is a brand new input sequence but it might be a symmetric state
             # this way we can track both of those possibilities
-            # hst = tuple(here_state)
+            #hst = tuple(here_state)
             if False:  # hst in states_to_keys:
-                # state = states_to_keys[hst]
-                # inputs_to_keys[prefix_key] = state
-                # interesting.append(state)
+                #    state = states_to_keys[hst]
+                #    inputs_to_keys[prefix_key] = state
+                #    interesting.append(state)
                 pass
             else:
-                # states_to_keys[hst] = next_state
+                #states_to_keys[hst] = next_state
                 keys_to_states[next_state] = here_state, prefix_key
                 inputs_to_keys[prefix_key] = next_state
                 interesting.append(next_state)
@@ -106,14 +122,24 @@ def start(config):
             "states": list(interesting),
             "data": []
         }
-
+        img = fceulib.VectorBytes()
         for i in interesting:
+            # TODO: often, interesting is a linear sequence so nearly
+            # all of the loads are wasted.  Can that be avoided?
             here_data = {}
+            # UGH UGH UGH
+            # have to actually load up one frame before state, then click it
+            # forward by the right inputs
             state, prefix = keys_to_states[i]
             emu.load(state)
+            if len(prefix) > 0:
+                in1, in2 = last_move(prefix)
+                emu.stepFull(in1, in2)
             for d in wanted_data:
                 if d == "framebuffer":
-                    here_data[d] = list(emu.image)
+                    emu.imageInto(img)
+                    here_data[d] = (numpy.array(img, copy=False).reshape(
+                        (256, 256, 4)) / 255.).tolist()
                 elif d == "inputs":
                     input_moves = [string.atoi(prefix[ii:i + 2], 16)
                                    for ii in range(len(prefix))]

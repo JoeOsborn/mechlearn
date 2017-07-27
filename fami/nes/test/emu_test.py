@@ -37,8 +37,18 @@ assert result["states"][-1] == 20, str(result)
 
 socket.send_json({"state": 18,
                   "inputs": all_inputs[18 * 2:25 * 2],
-                  "data": ["nta"],
+                  "data": ["nta", "framebuffer"],
                   "lastn": 2})
 result = socket.recv_json()
 assert result["states"][-1] == 25, str(result)
 print np.array(result["data"][-1]["nta"])
+oldfb = result["data"][-1]["framebuffer"]
+
+socket.send_json({"state": 5,
+                  "inputs": [],
+                  "lastn": 1,
+                  "data": ["framebuffer"]})
+result = socket.recv_json()
+assert result["states"][-1] == 5, str(result)
+newfb = result["data"][-1]["framebuffer"]
+assert oldfb != newfb

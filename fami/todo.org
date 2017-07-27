@@ -1,0 +1,13 @@
+* Remaining for ppu_dump:
+** real test for tiles.py, sprites.py
+** tile_scroll.py (automatically find scrolling regions too?)
+** vis_scroll.py
+* For track and filter:
+** entities.py
+** animations.py (feed back into entities?)
+* For other stuff...
+** overlay detection/layer lifting
+** charda
+** jumpfit
+** music/sfx detection/dumping
+** ...

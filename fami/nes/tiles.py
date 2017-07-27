@@ -117,22 +117,27 @@ ntsc_palette = [0x80, 0x80, 0x80, 0x00, 0x3D, 0xA6, 0x00, 0x12, 0xB0,
                 0x11, 0x11, 0x11]
 
 
-def get_colors(tileatt, ppuv, pal, is_sprite=False):
-    offset = 1 << 4 if is_sprite else 0
+def get_colors(tileatt, ppuv, pal):
+    offset = 0
     palette_id = offset | (tileatt << 2)
-    result = numpy.zeros(shape=(4, 3))
+    result = numpy.zeros(shape=(4, 4))
+    # TODO: consider that tiles may have transparency and sprites can draw behind them!
+    # This means that we can't colorize or at least can't draw the big picture
+    # until we know if a sprite pixel is overlapping a tile pixel and that
+    # sprite has background priority.
     for i in range(0, 4):
-        color_id = pal[palette_id + i]
-        result[i, :] = ntsc_palette[color_id * 3:color_id * 3 + 3]
+        color_id = pal[palette_id | i]
+        result[i, :3] = ntsc_palette[color_id * 3:color_id * 3 + 3]
+        result[i, 3] = 255.
     return result
 
 
 def colorize(pat, cols):
-    colored = numpy.zeros(shape=(pat.shape[0], pat.shape[1], 3))
+    colored = numpy.zeros(shape=(pat.shape[0], pat.shape[1], 4))
     for ii in range(pat.shape[0]):
         for jj in range(pat.shape[1]):
             colored[ii, jj] = cols[pat[ii, jj]]
-    return colored
+    return colored / 255.
 
 
 def start(services):
@@ -190,12 +195,14 @@ def start(services):
 
         pal = numpy.array(result["pal"], dtype=numpy.uint8)
         ppuv = result["ppu"]
+        ppumask = ppuv[1]
         chrram = numpy.array(result["chr"], dtype=numpy.uint8)
         big_picture = numpy.zeros(shape=(fullAttr.shape[0] * 8,
                                          fullAttr.shape[1] * 8,
-                                         3),
+                                         4),
                                   dtype=numpy.float32)
         color_tiles = {}
+        rendered = ppumask & (1 << 3)
         for ii in range(fullAttr.shape[0]):
             for jj in range(fullAttr.shape[1]):
                 tileid = fullNTs[ii, jj]
@@ -210,12 +217,17 @@ def start(services):
                 else:
                     tilecols = get_colors(tileatt, ppuv, pal)
                     attr2colors[tileatt] = tilecols
-                if (tileid, tileatt) not in color_tiles:
-                    color_tiles[(tileid, tileatt)] = colorize(pat, tilecols)
-                big_picture[ii * 8:ii * 8 + 8,
-                            jj * 8:jj * 8 + 8,
-                            :] = color_tiles[(tileid, tileatt)] / 255.0
-        output = {"state": state}
+                # TODO: store as two level dict
+                if tileid not in color_tiles:
+                    color_tiles[tileid] = {}
+                if tileatt not in color_tiles[tileid]:
+                    color_tiles[tileid][tileatt] = colorize(pat, tilecols)
+                if rendered:
+                    big_picture[ii * 8:ii * 8 + 8,
+                                jj * 8:jj * 8 + 8,
+                                :] = color_tiles[tileid][tileatt]
+        output = {"state": state,
+                  "rendered": rendered}
         for d in msg["data"]:
             if d == "tilemap":
                 output[d] = fullNTs.tolist()
@@ -234,8 +246,13 @@ def start(services):
                     lambda (k, v): (str(k), v.tolist()),
                     attr2colors.items()))
             elif d == "color_tiles":
+                # TODO: store or at least output as two-level dict because of
+                # compound key
                 output[d] = dict(map(
-                    lambda (k, v): (str(k), v.tolist()),
+                    lambda (k, v): (str(k),
+                                    dict(map(lambda (k2, v2): (str(k2),
+                                                               v2.tolist()),
+                                             v.items()))),
                     color_tiles.items()))
             else:
                 assert False, "Unrecognized data request" + str(d)

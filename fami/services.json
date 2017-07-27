@@ -2,5 +2,6 @@
     "game":"mario.nes",
     "fceux":"5555",
     "control":"5556",
-    "tiles":"5557"
+    "tiles":"5557",
+    "sprites":"5558"
 }
