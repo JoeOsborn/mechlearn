@@ -13,11 +13,13 @@ context = zmq.Context()
 print "Get started"
 fceusock = context.socket(zmq.REQ)
 fceusock.connect("tcp://127.0.0.1:5555")
-t = 1825
+t = 1824
 print "go to", t / 2, "out of", (len(all_inputs) / 2)
 print "Ask0"
-fceusock.send_json({"state": 0, "inputs": all_inputs[
-                   :t], "lastn": 1, "data": ["framebuffer"]})
+fceusock.send_json({"state": 0,
+                    "inputs": all_inputs[:t],
+                    "lastn": 1,
+                    "data": ["framebuffer"]})
 emu_result = fceusock.recv_json()
 state = emu_result["states"][-1]
 fb = emu_result["data"][-1]["framebuffer"]
