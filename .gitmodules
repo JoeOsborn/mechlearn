@@ -9,3 +9,6 @@
 [submodule "pybind11"]
 	path = pybind11
 	url = git@github.com:pybind/pybind11.git
+[submodule "Mesen"]
+	path = Mesen
+	url = git@github.com:SourMesen/Mesen.git

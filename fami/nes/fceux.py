@@ -138,8 +138,10 @@ def start(config):
             for d in wanted_data:
                 if d == "framebuffer":
                     emu.imageInto(img)
-                    here_data[d] = (numpy.array(img, copy=False).reshape(
-                        (256, 256, 4)) / 255.).tolist()
+                    here_data[d] = (numpy.array(img,
+                                                copy=False,
+                                                dtype=numpy.uint8).reshape(
+                        (256, 256, 4))).tolist()
                 elif d == "inputs":
                     input_moves = [string.atoi(prefix[ii:i + 2], 16)
                                    for ii in range(len(prefix))]

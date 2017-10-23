@@ -1,6 +1,10 @@
 import zmq
 import fceulib
 import numpy as np
+import matplotlib.pyplot as plt
+import sys
+sys.path.append('/usr/local/lib/python2.7/site-packages')
+import cv2
 
 inputVec = fceulib.readInputs('Illustrative.fm2')
 
@@ -52,3 +56,20 @@ result = socket.recv_json()
 assert result["states"][-1] == 5, str(result)
 newfb = result["data"][-1]["framebuffer"]
 assert oldfb != newfb
+
+t = 1824
+print "go to", t / 2, "out of", (len(all_inputs) / 2)
+print "Ask0"
+socket.send_json({"state": 0,
+                  "inputs": all_inputs[:t],
+                  "lastn": 1,
+                  "data": ["framebuffer"]})
+emu_result = socket.recv_json()
+state = emu_result["states"][-1]
+fb = emu_result["data"][-1]["framebuffer"]
+npimg = np.array(fb, dtype=np.uint8)
+cv2.imwrite("out/expected1.png",
+            cv2.cvtColor(npimg, cv2.COLOR_RGB2BGR))
+plt.figure(figsize=(4, 4))
+plt.imshow(npimg)
+plt.savefig("out/expected2.png")
