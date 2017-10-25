@@ -21,7 +21,8 @@ pip install pytest cv2wrap pillow numpy matplotlib scipy scikit-learn jupyter ne
 cd pybind11
 mkdir build
 cd build
-cmake -D PYBIND11_PYTHON_VERSION=2.7 && make pytest -j 4
+cmake -D PYBIND11_PYTHON_VERSION=2.7 .. && make pytest -j 4
+cp -r ../include/pybind11 /usr/local/include/ # or modify the fceulib makefile to look for these in the right place. 
 
 cd ../..
 
