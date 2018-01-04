@@ -12,3 +12,6 @@
 [submodule "Mesen"]
 	path = Mesen
 	url = git@github.com:SourMesen/Mesen.git
+[submodule "mypy-data"]
+	path = mypy-data
+	url = https://github.com/machinalis/mypy-data.git

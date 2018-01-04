@@ -1,0 +1,14 @@
+* Get mesen working
+** update remocon to not use <<, use put and write instead
+** test sprite, tile, etc outputs in tester.py
+
+* Update stuff for mesen
+** utility stuff
+** make an fm2 parser or bind that part of mesen somehow
+** CHARDA
+** Jumpfit
+** Mappy
+* Give types to important code
+* Support python 3
+* Much later
+** SNES, etc
