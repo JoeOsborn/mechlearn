@@ -342,7 +342,9 @@ def test_sprite_data_(emu, colorized2id, id2colorized, timestep, data):
                 colorized2id[uniq]
             ] = colorized_sprites[sprite_id]
         # print timestep,  colorized2id[uniq], sprite[:2]
-        data[timestep] = (timestep, colorized2id[uniq], sprite)
+        if timestep not in data:
+            data[timestep] = []
+        data[timestep].append((timestep, colorized2id[uniq], sprite))
     return data
 
 
