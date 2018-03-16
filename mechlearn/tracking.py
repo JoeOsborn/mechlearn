@@ -124,7 +124,7 @@ def tracks_from_sprite_data(sprite_data, sigma = 8.0, min_gate = 5.0):
             top = float('inf')
             bottom = float('-inf')
             #print timestep, set_id
-            for sprite in sprites:
+            for sprite in sprites:  
                 height = 16 if (dat[sprite][1][-1][0] & (1 << 5)) else 8
                 left = min(dat[sprite][1][0], left)
                 right = max(dat[sprite][1][0] + height, right)
@@ -165,6 +165,7 @@ def tracks_from_sprite_data(sprite_data, sigma = 8.0, min_gate = 5.0):
             continue
 
         bounding_boxes = timesteps_bb[timestep]
+        
         B = nx.Graph()
         for track in tracks:
             B.add_node(track)
@@ -189,6 +190,7 @@ def tracks_from_sprite_data(sprite_data, sigma = 8.0, min_gate = 5.0):
         match = matching.max_weight_matching(B)
         just_created = set()
         for sprite_id, sprite in enumerate(bounding_boxes):
+            
             obs = np.array([sprite[0], 240 - sprite[1]])
             track = match['sprite{}'.format(sprite_id)]
             if 'start' in track:
