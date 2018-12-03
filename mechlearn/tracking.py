@@ -11,7 +11,7 @@ def weight(data, track, R):
     return scipy.stats.norm(0, R).pdf(distance)
 
 
-def tracks_from_sprite_data(sprite_data):
+def tracks_from_sprite_data(sprite_data, sigma = 8.0, min_gate = 5.0):
     # uses normalized pmi as a thresholding mechanism
     # -1 = no co-occurences,
     # 0 = independent
@@ -21,14 +21,15 @@ def tracks_from_sprite_data(sprite_data):
     # Read in data
     timesteps = {}
     pSprite = {}
-
-    for dat in sprite_data:
-        if dat[0] not in timesteps:
-            timesteps[dat[0]] = []
-        timesteps[dat[0]].append(dat[1:])
-        if dat[1] not in pSprite:
-            pSprite[dat[1]] = 0
-        pSprite[dat[1]] += 1
+    
+    for tt in sprite_data:
+        timesteps[tt] = []
+        for sprite in sprite_data[tt]:
+            
+            timesteps[tt].append(sprite[1:])
+            if sprite[1] not in pSprite:
+                pSprite[sprite[1]] = 0
+            pSprite[sprite[1]] += 1
 
     # get the per timestep data, as well as total counts for each sprite are,
     # if they are within width and height of each other,
@@ -41,7 +42,7 @@ def tracks_from_sprite_data(sprite_data):
     for timestep in sorted_timesteps:
         dat = timesteps[timestep]
         for ii in range(len(dat)):
-            #plt.plot(timestep,dat[ii][1][1],colors[dat[ii][0]])
+            plt.plot(timestep,dat[ii][1][1],'.')
             for jj in range(len(dat)):
                 if ii != jj:
                     id1 = dat[ii][0]
@@ -63,8 +64,8 @@ def tracks_from_sprite_data(sprite_data):
                     if id2 not in all_sprites[id1]:
                         all_sprites[id1][id2] = 0
                     all_sprites[id1][id2] += 1
-    #plt.show()
-    #plt.clf()
+    plt.show()
+    plt.clf()
     # now we have all of the pieces and can calculate the pmi for each pair of
     # sprites
     accepted = set()
@@ -123,7 +124,7 @@ def tracks_from_sprite_data(sprite_data):
             top = float('inf')
             bottom = float('-inf')
             #print timestep, set_id
-            for sprite in sprites:
+            for sprite in sprites:  
                 height = 16 if (dat[sprite][1][-1][0] & (1 << 5)) else 8
                 left = min(dat[sprite][1][0], left)
                 right = max(dat[sprite][1][0] + height, right)
@@ -135,12 +136,11 @@ def tracks_from_sprite_data(sprite_data):
                             left,
                             right,
                             top,
-                            bottom)] = [dat[ii]
+                            bottom,
+                            right-left,
+                            bottom-top)] = [dat[ii]
                                             for ii in sorted(merged[set_id])]
             
-
-    sigma = 8.0
-    min_gate = 5.0
 
     tracks = {}
     old_tracks = []
@@ -165,6 +165,7 @@ def tracks_from_sprite_data(sprite_data):
             continue
 
         bounding_boxes = timesteps_bb[timestep]
+        
         B = nx.Graph()
         for track in tracks:
             B.add_node(track)
@@ -189,6 +190,7 @@ def tracks_from_sprite_data(sprite_data):
         match = matching.max_weight_matching(B)
         just_created = set()
         for sprite_id, sprite in enumerate(bounding_boxes):
+            
             obs = np.array([sprite[0], 240 - sprite[1]])
             track = match['sprite{}'.format(sprite_id)]
             if 'start' in track:
@@ -204,7 +206,7 @@ def tracks_from_sprite_data(sprite_data):
         for track in tracks:
             if track not in match:
                 if track not in just_created:
-                    if coast[track] > 4:
+                    if coast[track] > 5:
                         old_tracks.append((track, tracks[track]))
                         to_delete.add(track)
                     else:
