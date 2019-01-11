@@ -1,0 +1,21 @@
+Bootstrap: docker
+From: ubuntu:18.04
+
+%setup
+  mkdir -p /work/mechlearn
+  mkdir -p /local
+%environment
+  PATH=/usr/local/miniconda/bin:$PATH
+%post
+  mkdir -p /work/mechlearn
+  mkdir -p /local
+  apt-get update
+  apt-get -y install curl python3 python3-pip
+  pip3 install numpy scipy matplotlib scikit-learn keras tensorflow-gpu pillow
+  apt-get -y install libboost-filesystem-dev clang
+  apt-get -y install build-essential make
+  apt-get -y install libsdl2-dev
+  apt-get clean
+  #rm -rf /var/lib/apt/lists/*
+  #cd mesen
+  #make -j 7 linux && make remocon && cp remocon/obj.x64/remocon /usr/local/bin/ && pip3 install .
