@@ -25,15 +25,16 @@ def dump_ppm(buf, fl):
     ppmfile.close()
 
 
-def process_play(romfile, fm2file):
+def process_play(romfile, fm2file, limit=None):
+    # issue: time correlated data.  maybe cropping will help.  it's faster to just grind through the fm2 file rather than saving and loading and it will be faster still if I only get certain frames instead of all frames.  later I can do xdelta to limit the size on disk and in memory maybe...
     controls_fm = remocon.read_fm2("datagen/" + fm2file)
     controls = list(map(remocon.moves_to_bytes, controls_fm))
-    ctrl_count = len(controls[0])
+    ctrl_count = len(controls[0]) if limit is None else min(limit, len(controls[0]))
     romkey = romfile.replace("/", "_").replace(" ", "-")
     fm2key = fm2file.replace("/", "_").replace(" ", "-")
     with h5py.File('datagen/nes.hdf5', 'r+') as datafile:
-        screenshotsds = datafile.create_dataset('scroll/{}/{}/screenshots'.format(romkey, fm2key), (ctrl_count, 240, 256, 3), dtype='uint8', compression="gzip", compression_opts=9, shuffle=True)
-        scrollshotsds = datafile.create_dataset('scroll/{}/{}/scrollshots'.format(romkey, fm2key), (ctrl_count, 240, 256, 2), dtype='float', compression="gzip", compression_opts=9, shuffle=True)
+        screenshotsds = datafile.create_dataset('scroll/{}/{}/screenshots'.format(romkey, fm2key), (ctrl_count, 240, 256, 3), dtype='uint8', compression="blosc")
+        scrollshotsds = datafile.create_dataset('scroll/{}/{}/scrollshots'.format(romkey, fm2key), (ctrl_count, 240, 256, 2), dtype='float', compression="blosc")
 
         print(ctrl_count)
 
@@ -42,7 +43,6 @@ def process_play(romfile, fm2file):
         span = 200
         screenshots = np.zeros((span, 240, 256, 3), dtype='uint8')
         scrollshots = np.zeros((span, 240, 256, 2), dtype='uint8')
-
         for steps in range(0, ctrl_count, span):
             step_end = min(ctrl_count, steps + span)
             start_t = time.time()
@@ -73,11 +73,12 @@ def process_play(romfile, fm2file):
             print("Data written", time.time() - start_t)
 
 
-# process_play(
-    # "src/smb/Super Mario Bros. (JU) [!].nes",
-    # "src/smb/happylee_mars608-smb-warpless.fm2"
-# )
 process_play(
-    "src/loz/Legend of Zelda, The (U) (PRG0) [!].nes",
-    "src/loz/taseditorv1-legendofzelda-allitems.fm2"
+    "src/smb/Super Mario Bros. (JU) [!].nes",
+    "src/smb/happylee_mars608-smb-warpless.fm2",
+    900
 )
+# process_play(
+# "src/loz/Legend of Zelda, The (U) (PRG0) [!].nes",
+# "src/loz/taseditorv1-legendofzelda-allitems.fm2"
+# )
