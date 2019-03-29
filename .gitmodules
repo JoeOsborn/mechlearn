@@ -16,3 +16,6 @@
 	path = mesen
 	url = git@github.com:JoeOsborn/Mesen.git
 	branch = mac
+[submodule "gym-retro"]
+	path = gym-retro
+	url = https://github.com/openai/retro.git
