@@ -10,17 +10,14 @@ import scipy.misc
 import cv2
 import pickle
 from typing import List, Dict, Tuple, Sequence
-
+from tracking import Track, Tracks
+from ppu_dump import RowCol, PPUDump
 # Type aliases
 Rect = Tuple[int, int, int, int]
 Inputs = Sequence[int]
 Time = int
 Tile = Tuple[int, int, int]
-RowCol = Tuple[int, int]
-ColRow = Tuple[int, int]
 Room = Dict[RowCol, Dict[Time, Tile]]
-SpriteData = Tuple[int, ColRow,  int]
-Track = Dict[Time, Tuple[ColRow, Bbox, SpriteData]]
 
 
 class Mappy:
@@ -37,44 +34,44 @@ class Mappy:
         self.inputs1 = fceulib.readInputs(movie)
         self.inputs2 = fceulib.readInputs2(movie)
         self.debug_display = debug_display
-        self.startedup = False
+        self.ep_data = {}
+        self.rooms = {}
 
-    def skip_steps(self, inp1s: Inputs, inp2s: Inputs):
-        for i, i2 in zip(inp1s, inp2s):
+    def dump_run(self) -> PPUDump:
+        for i, i2 in zip(self.inputs1[:self.start_t], self.inputs2[:self.start_t]):
             self.emu.stepFull(i, i2)
-
-    def drive(self, inp1s: Inputs, inp2s: Inputs):
-        # call read_room repeatedly until exhausting inp1s, inp2s
-        while inp1s:
-            room, tracks, inp1s, inp2s = self.read_room(inp1s, inp2s)
-            self.refine_room_tiles(room, tracks)
-            self.merge_room(room, self.rooms)
-            self.last_room = rooms
-        pass
-
-    def read_room(self, inp1s: Inputs, inp2s: Inputs) -> Tuple[Room, Dict[str, Track], Inputs, Inputs):
-        # Read one room at a time worth of inputs
-        pass
-
-    def dump_run(self):
-        if not self.startedup:
-            self.startup()
-        p1inputs = self.inputs1[self.start_t:self.end_t]
-        p2inputs = self.inputs2[self.start_t:end_t]
         self.ep_data = ppu_dump.ppu_output(
             self.emu,
-            inputs1=p1inputs,
-            inputs2=p2inputs,
+            self.inputs1[self.start_t:self.end_t],
+            inputs2=self.inputs2[self.start_t:self.end_t],
             bg_data=True,
             scrolling=True,
             sprite_data=True,
             colorized_tiles=False,
             display=False,
             test_control=True,
-            peekevery=4,
-            scroll_area=self.scroll_area)
+            peekevery=1,
+            scroll_area=self.scroll_area,
+            debug_output=self.debug_display)
         return self.ep_data
-# TODO no I don't like this, make it work one room at a time obviously and do sprites and everything that way too.  Time to... rewrite it in rust???  This also means ppu_dump is not quite right, since it does the run at a time.  even so, I'm ok with doing the run at a time and the mapping/rest of the pipeline room by room.
+
+    # def drive(self, inp1s: Inputs, inp2s: Inputs):
+    #     # call read_room repeatedly until exhausting inp1s, inp2s
+    #     while inp1s:
+    #         room, tracks, inp1s, inp2s = self.read_room(inp1s, inp2s)
+    #         self.refine_room_tiles(room, tracks)
+    #         self.merge_room(room)
+    #     pass
+
+    # def read_room(self, inp1s: Inputs, inp2s: Inputs) -> Tuple[Room, Tracks, Inputs, Inputs]:
+
+    #     return ({}, {}, [], [])
+
+    # def refine_room_tiles(self, room, tracks):
+    #     pass
+
+    # def merge_room(self, room):
+    #     pass
 
     def map_rooms(self):
         from collections import Counter
@@ -150,8 +147,8 @@ class Mappy:
                             nt_total[key][t_] = potential_nt_total[key][t_]
                     potential_nt_total = {}
                     potential_interstitial = False
-             if not (interstitial or potential_interstitial):
-                 for x in range(0, self.scroll_area[2]):
+            if not (interstitial or potential_interstitial):
+                for x in range(0, self.scroll_area[2]):
                     for y in range(0, self.scroll_area[3]):
                         key = (y + tiley, x + tilex)
                         if key not in nt_total:
@@ -192,17 +189,18 @@ class Mappy:
                 nt_totals.append(nt_total)
                 for t_ in range(t - previousTimeSinceControl, t):
                     room_v_time[t] = len(nt_totals) - 1
-                room_starts[len(nt_totals) - 1] = (ep_data["screen_scrolls"][t][0],
-                                                   ep_data["screen_scrolls"][t][1])
+                room_starts[len(nt_totals) - 1] = (self.ep_data["screen_scrolls"][t][0],
+                                                   self.ep_data["screen_scrolls"][t][1])
             room_v_time[t] = len(nt_totals) - 1
-            if t in ep_data["screen_scrolls"]:
-                screen_offsets[t] = (ep_data["screen_scrolls"][t][0],
-                                     ep_data["screen_scrolls"][t][1])
+            if t in self.ep_data["screen_scrolls"]:
+                screen_offsets[t] = (self.ep_data["screen_scrolls"][t][0],
+                                     self.ep_data["screen_scrolls"][t][1])
             else:
                 screen_offsets[t] = (tilex * 8, tiley * 8)
         self.screen_offsets = screen_offsets
         self.nt_totals = nt_totals
-        return self.nt_totals,self.screen_offsets
+        print((nt_totals[0][(0, 0)]))
+        return self.nt_totals, self.screen_offsets
 
 
 def convert_image(img_buffer):
@@ -211,40 +209,43 @@ def convert_image(img_buffer):
     return screen.reshape([256, 256, 4]).astype(np.uint8)
 
 
-if __name__ == "main":
-    import sys
-    try:
-        step = sys.argv[1]
-        into = sys.argv[2]
-        rom = sys.argv[3]
-        run = sys.argv[4]
-        if len(sys.argv) > 5:
-            start_t = int(sys.argv[5])
-        else:
-            start_t = -1
-        if len(sys.argv) == 6:
-            end_t = sys.argv[6]
-        else:
-            end_t = -1
-        with open("runs.json") as runsfile:
-            runs = json.load(runsfile)
-            rominfo = runs[rom]
-            scroll_area = rominfo["scroll_area"]
-            if start_t < 0:
-                runinfo = next(x for x in rominfo["runs"] if x["name"] == run)
-                start_t = runinfo["start_t"]
-                mappy = Mappy(rom, run, scroll_area, start_t, end_t)
-    except:
-        print("Usage: mappy.py step into rom run [start_t] [end_t]\n  Step: all/dump/tiles/images/sprites/tracks/sprite_anim/tile_anim")
-        raise
-    if step == "all" or step == "dump":
-        ep_data = mappy.dump_run()
-        pickle.dump(ep_data, into + "/ep_data.pkl")
-    if step == "all" or step == "tiles":
-        if mappy.ep_data is None:
-            mappy.ep_data = pickle.load(into + "/ep_data.pkl")
-        rooms = mappy.map_rooms()
-        pickle.dump(rooms, into + "/room_data.pkl")
-    if step == "all" or step == "images":
-        if mappy.nt_totals is None or mappy.screen_offsets is None:
-            mappy.nt_totals, mappy.screen_offsets = pickle.load(into + "/ep_data.pkl")
+if __name__ == "__main__":
+    def do_main():
+        import sys
+        try:
+            step = sys.argv[1]
+            into = sys.argv[2]
+            rom = sys.argv[3]
+            run = sys.argv[4]
+            if len(sys.argv) > 5:
+                start_t = int(sys.argv[5])
+            else:
+                start_t = -1
+            if len(sys.argv) > 6:
+                end_t = int(sys.argv[6])
+            else:
+                end_t = -1
+            with open("runs.json") as runsfile:
+                runs = json.load(runsfile)
+                rominfo = runs[rom]
+                scroll_area = rominfo["scroll_area"]
+                if start_t < 0:
+                    runinfo = next(x for x in rominfo["runs"] if x["name"] == run)
+                    start_t = runinfo["start_t"]
+            print("Config", rom, run, scroll_area, start_t, end_t)
+            mappy = Mappy(rom, run, scroll_area, start_t, end_t)
+        except:
+            print("Usage: mappy.py step into rom run [start_t] [end_t]\n  Step: all/dump/map")
+            raise
+        if step == "all" or step == "dump":
+            ep_data = mappy.dump_run()
+            with open(into + "/ep_data.pkl", 'wb') as f:
+                pickle.dump(ep_data, f)
+        if step == "all" or step == "map":
+            if not mappy.ep_data:
+                with open(into + "ep_data.pkl", 'rb') as f:
+                    mappy.ep_data = pickle.load(f)
+            rooms = mappy.map_rooms()
+            with open(into + "room_data.pkl", 'wb') as f:
+                pickle.dump(rooms, f)
+    do_main()

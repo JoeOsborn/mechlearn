@@ -6,25 +6,13 @@ from networkx.algorithms import matching
 import scipy.stats
 import matplotlib.pyplot as plt
 from typing import Dict, Tuple, Sequence, List, Set, Optional, TypeVar
+from ppu_dump import SpriteIdx, HwSprite, Col, Row, ColRow, Time, SpriteId, SpriteData, DX, DY
 
-
-Col = int
-Row = int
-RowCol = Tuple[Row, Col]
-ColRow = Tuple[Col, Row]
-Time = int
-SpriteId = str
-SpriteIdx = int
-HwSpriteIdx = int
-PPURegs = Tuple[int, int, int, int]
-# x y idx bg pal hflip vflip ppu_regs
-HwSprite = Tuple[Col, Row, HwSpriteIdx, bool, int, bool, bool, PPURegs]
 
 SpriteTrack = Tuple[SpriteIdx, HwSprite]
 
 BoxId = Tuple[Col, Row, Col, Col, Row, Row, int, int]  # cx cy l r t b w h
 BoundingBoxes = Dict[BoxId, List[SpriteTrack]]
-SpriteDatum = Tuple[Time, SpriteIdx, HwSprite]
 
 TrackDatum = Tuple[ColRow, BoxId, List[SpriteTrack]]
 Track = Dict[Time, TrackDatum]
@@ -33,9 +21,6 @@ IdType1 = TypeVar("IdType1")
 IdType2 = TypeVar("IdType2")
 Count = int
 Cooccur = Dict[IdType1, Dict[IdType2, Count]]
-
-DX = int
-DY = int
 
 OffsetSpriteIdx = Tuple[SpriteIdx, DX, DY]
 OldTracks = List[Tuple[SpriteId, Track]]
@@ -47,7 +32,7 @@ def weight(data: ColRow, track: ColRow, R: float) -> float:
 
 
 def tracks_from_sprite_data(
-        sprite_data: Dict[Time, List[SpriteDatum]],
+        sprite_data: SpriteData,
         sigma=8.0,
         min_gate=5.0) -> Tuple[Tracks, OldTracks]:
     # uses normalized pmi as a thresholding mechanism

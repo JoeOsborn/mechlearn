@@ -19,3 +19,6 @@
 [submodule "gym-retro"]
 	path = gym-retro
 	url = https://github.com/openai/retro.git
+[submodule "numpy-stubs"]
+	path = numpy-stubs
+	url = https://github.com/numpy/numpy-stubs.git

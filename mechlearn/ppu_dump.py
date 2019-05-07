@@ -4,13 +4,67 @@ import numpy as np
 import random
 from fceu_help import pointer_to_numpy, colorize_tile
 from fceu_help import get_all_sprites, get_tile, get_sprite, outputImage
-from math import log
 import cv2
-if __name__ != "__main__":
-    import matplotlib.pyplot as plt
+from typing import Dict, Tuple, List, Any, Sequence
+from mypy_extensions import TypedDict
+import matplotlib.pyplot as plt
+
+Col = int
+Row = int
+RowCol = Tuple[Row, Col]
+ColRow = Tuple[Col, Row]
+DX = int
+DY = int
+Time = int
+SpriteId = str
+SpriteIdx = int
+HwSpriteIdx = int
+PPURegs = Tuple[int, int, int, int]
+# x y idx bg pal hflip vflip ppu_regs
+HwSprite = Tuple[Col, Row, HwSpriteIdx, bool, int, bool, bool, PPURegs]
+SpriteDatum = Tuple[Time, SpriteIdx, HwSprite]
+SpriteData = Dict[Time, List[SpriteDatum]]
+ColoredPattern = np.ndarray
+ColoredPatternTuple = tuple
+
+DXY = Tuple[DX, DY]
+Corr = float
+
+ScreenMotion = Dict[Time, DXY]
+ScreenScrolls = Dict[Time, ColRow]
+ScreenCorrs = Dict[Time, Corr]
+FullNametables = Dict[Time, np.ndarray]
+FullAttrs = Dict[Time, np.ndarray]
+Palettes = Dict[Time, Any]
+ScrolledNametables = Dict[Time, np.ndarray]
+ScrolledAttrs = Dict[Time, np.ndarray]
+ColoredTiles = Dict[int, ColoredPattern]
+TilemapMotion = Dict[Time, DXY]
+TilemapScrolls = Dict[Time, ColRow]
+ColoredSprites = Dict[int, ColoredPattern]
+
+ColoredSpritesInverse = Dict[ColoredPatternTuple, int]
+
+PPUDump = TypedDict("PPUDump",
+                    {
+                        'screen_motion': ScreenMotion,
+                        'screen_scrolls': ScreenScrolls,
+                        'screen_corrs': ScreenCorrs,
+                        'full_nametables': FullNametables,
+                        'full_attrs': FullAttrs,
+                        'palettes': Palettes,
+                        'nametables': ScrolledNametables,
+                        'attr': ScrolledAttrs,
+                        'tile2colorized': ColoredTiles,
+                        'tilemap_motion': TilemapMotion,
+                        'tilemap_scrolls': TilemapScrolls,
+                        'id2colorized': ColoredSprites,
+                        'colorized2id': ColoredSpritesInverse,
+                        'sprite_data': SpriteData
+                    }, total=False)
 
 
-def convert_image(img_buffer, col=cv2.COLOR_RGB2GRAY):
+def convert_image(img_buffer: Sequence[int]) -> np.ndarray:
     # TODO: without allocations/reshape?
     screen = pointer_to_numpy(img_buffer, copy=True)
     return screen.reshape([256, 256, 4])[:240, :, :3].astype(np.uint8)
@@ -48,8 +102,7 @@ mirror_modes = {
 }
 
 
-def nt_page(nt, nti, mirroring):
-    global mirror_modes
+def nt_page(nt: np.ndarray, nti: int, mirroring: int) -> Tuple[np.ndarray, np.ndarray]:
     start = mirror_modes[mirroring][nti] * 1024
     base_nt = nt[start: start + 960]
     base_attr = nt[start + 960: start + 960 + 64]
@@ -110,7 +163,7 @@ def test_control_(emu, start_state,
 
 
 def test_scrolling_visual_(np_image_prev, np_image, net_x, net_y,
-                           offset_left, offset_top, scroll_area):
+                           offset_left, offset_top, scroll_area) -> Tuple[DXY, ColRow, Corr]:
     # TODO: maybe instead consider a span of columns on the left and
     # middle and right and a span of rows on the top and middle and
     # bottom, and see which of those are moving in what direction, and
@@ -233,7 +286,7 @@ def fill_big_picture(nts, attrs, pal, tile2colorized, big_picture):
 
 def test_bg_data_scrolled_(nts, attrs, pal, tile2colorized,
                            scroll_area, timestep, last_tm_scroll,
-                           big_picture, np_image, debug_output):
+                           big_picture, np_image, debug_output) -> Tuple[np.ndarray, np.ndarray, DXY, ColRow]:
     # OK, let's figure out our scrolling situation.
     # First build a mighty template image out of the whole picture.
     # We're gonna template match to see how the baby real image fits inside
@@ -464,7 +517,7 @@ def ppu_output(emu, inputVec, **kwargs):
         np_image_prev = np_image_temp
 
     emu.load(start)
-    results = {}
+    results: PPUDump = {}
     if get_scroll:
         results["screen_motion"] = motion
         results["screen_scrolls"] = scrolls
@@ -488,49 +541,51 @@ def ppu_output(emu, inputVec, **kwargs):
 
 
 if __name__ == '__main__':
-    rom = "metroid.nes"
-    #movie = "metroid.fm2"
-    start_t = 300
-    movie = 'lordtom-metroid-100.fm2'
-    #movie = "metroid-long.fm2"
+    def runmain():
+        rom = "metroid.nes"
+        #movie = "metroid.fm2"
+        start_t = 300
+        movie = 'lordtom-metroid-100.fm2'
+        #movie = "metroid-long.fm2"
 
-    #rom = 'zelda.nes'
-    #movie = 'baxter,jprofit22-legendofzelda.fm2'
-    #movie = 'zelda.fm2'
+        #rom = 'zelda.nes'
+        #movie = 'baxter,jprofit22-legendofzelda.fm2'
+        #movie = 'zelda.fm2'
 
-    #rom = 'zelda.nes'
-    #movie = 'zelda_dungeon1.fm2'
-    #movie = 'zelda.fm2'
-    #start_t = 300
+        #rom = 'zelda.nes'
+        #movie = 'zelda_dungeon1.fm2'
+        #movie = 'zelda.fm2'
+        #start_t = 300
 
-    # rom = "smb2u.nes"
-    # movie = "smb2u.fm2"
-    # start_t = 700
-    emu = fceulib.runGame(rom)
-    inputs1 = fceulib.readInputs(movie)
-    inputs2 = fceulib.readInputs2(movie)
+        # rom = "smb2u.nes"
+        # movie = "smb2u.fm2"
+        # start_t = 700
+        emu = fceulib.runGame(rom)
+        inputs1 = fceulib.readInputs(movie)
+        inputs2 = fceulib.readInputs2(movie)
 
-    for i, i2 in zip(inputs1[:start_t], inputs2[:start_t]):
-        emu.stepFull(i, i2)
+        for i, i2 in zip(inputs1[:start_t], inputs2[:start_t]):
+            emu.stepFull(i, i2)
 
-    end = start_t + 3600
-    # METROID
-    scroll_area = (0, 0, 32, 30 - 0)
+        end = start_t + 3600
+        # METROID
+        scroll_area = (0, 0, 32, 30 - 0)
 
-    # ZELDA
-    #scroll_area= (0,8,32,30-8)
+        # ZELDA
+        #scroll_area= (0,8,32,30-8)
 
-    #MARIO, ZELDA2
-    #scroll_area = (0, 4, 32, 30-4)
+        #MARIO, ZELDA2
+        #scroll_area = (0, 4, 32, 30-4)
 
-    ep_data = ppu_output(emu,
-                         inputs1[start_t:end],
-                         inputs2=inputs2[start_t:end],
-                         bg_data=True,
-                         scrolling=True,
-                         sprite_data=True,
-                         colorized_tiles=False,
-                         display=False,
-                         test_control=True,
-                         scroll_area=scroll_area,
-                         debug_output=False)
+        ep_data = ppu_output(emu,
+                             inputs1[start_t:end],
+                             inputs2=inputs2[start_t:end],
+                             bg_data=True,
+                             scrolling=True,
+                             sprite_data=True,
+                             colorized_tiles=False,
+                             display=False,
+                             test_control=True,
+                             scroll_area=scroll_area,
+                             debug_output=False)
+    runmain()
