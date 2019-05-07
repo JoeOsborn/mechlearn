@@ -7,3 +7,5 @@ batman_*.png
 *.dSYM
 .ipynb_checkpoints/
 *.pkl
+.DS_Store
+.mypy_cache/
