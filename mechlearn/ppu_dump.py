@@ -38,10 +38,11 @@ FullAttrs = Dict[Time, np.ndarray]
 Palettes = Dict[Time, Any]
 ScrolledNametables = Dict[Time, np.ndarray]
 ScrolledAttrs = Dict[Time, np.ndarray]
-ColoredTiles = Dict[int, ColoredPattern]
+TileKey = Tuple[int, int, int]
+ColoredTiles = Dict[TileKey, np.ndarray]
 TilemapMotion = Dict[Time, DXY]
 TilemapScrolls = Dict[Time, ColRow]
-ColoredSprites = Dict[int, ColoredPattern]
+ColoredSprites = Dict[int, np.ndarray]
 
 ColoredSpritesInverse = Dict[ColoredPatternTuple, int]
 
@@ -60,7 +61,8 @@ PPUDump = TypedDict("PPUDump",
                         'tilemap_scrolls': TilemapScrolls,
                         'id2colorized': ColoredSprites,
                         'colorized2id': ColoredSpritesInverse,
-                        'sprite_data': SpriteData
+                        'sprite_data': SpriteData,
+                        'has_controls': Dict[Time, bool]
                     }, total=False)
 
 
@@ -436,8 +438,8 @@ def ppu_output(emu, inputVec, **kwargs):
         big_picture = np.zeros(shape=(240 * 2, 256 * 2, 3))
 
     if test_control:
-
         start_state = fceulib.VectorBytes()
+
     display = kwargs.get("display", True)
     net_x = 0
     net_y = 0
@@ -446,6 +448,8 @@ def ppu_output(emu, inputVec, **kwargs):
 
     has_controls = {}
     for timestep, (inp, inp2) in enumerate(zip(inputVec, inputs2)):
+        if timestep % 500 == 0:
+            print("Step:", timestep)
         should_peek = timestep % peekevery == 0
 
         # Have to do this before running this step of input
